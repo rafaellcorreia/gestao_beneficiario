@@ -122,6 +122,7 @@ const Index = () => {
   }, [beneficiarios, busca, filters]);
 
 
+  const baseUrl = import.meta.env.BASE_URL || '/';
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -130,7 +131,7 @@ const Index = () => {
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div className="flex items-center gap-6">
               <img 
-                src="/logo_semed_red.PNG" 
+                src={`${baseUrl}logo_semed_red.PNG`} 
                 alt="Logo NGPRC" 
                 className="flex-shrink-0 object-contain rounded-lg"
                 style={{ 
