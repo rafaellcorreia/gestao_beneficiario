@@ -73,6 +73,10 @@ export function EmployeeForm({ onSubmit, onCancel, initialData }: EmployeeFormPr
   const dataRecebimento = watch("dataRecebimento");
   const horasCumpridasWatch = watch('horasCumpridas');
   const horasRestantesWatch = watch('horasRestantes');
+  const telPrincipalDDD = watch('telefonePrincipalDDD' as any);
+  const telPrincipalNumero = watch('telefonePrincipalNumero' as any);
+  const telSecundarioDDD = watch('telefoneSecundarioDDD' as any);
+  const telSecundarioNumero = watch('telefoneSecundarioNumero' as any);
 
   // Define o total inicial na primeira mudança
   useEffect(() => {
@@ -81,6 +85,23 @@ export function EmployeeForm({ onSubmit, onCancel, initialData }: EmployeeFormPr
       setHorasIniciais(total);
     }
   }, [horasCumpridasWatch, horasRestantesWatch, horasIniciais]);
+
+  // Monta campos de telefone (DDD + número -> telefonePrincipal/telefoneSecundario)
+  useEffect(() => {
+    const onlyDigits = (s?: string) => (s || '').replace(/\D/g, '');
+    const ddd = onlyDigits(telPrincipalDDD).slice(0, 2);
+    const num = onlyDigits(telPrincipalNumero).slice(0, 9);
+    const formatted = ddd && num ? `(${ddd}) ${num.length > 5 ? `${num.slice(0, num.length-4)}-${num.slice(-4)}` : num}` : '';
+    setValue('telefonePrincipal' as any, formatted || undefined, { shouldDirty: true });
+  }, [telPrincipalDDD, telPrincipalNumero, setValue]);
+
+  useEffect(() => {
+    const onlyDigits = (s?: string) => (s || '').replace(/\D/g, '');
+    const ddd = onlyDigits(telSecundarioDDD).slice(0, 2);
+    const num = onlyDigits(telSecundarioNumero).slice(0, 9);
+    const formatted = ddd && num ? `(${ddd}) ${num.length > 5 ? `${num.slice(0, num.length-4)}-${num.slice(-4)}` : num}` : '';
+    setValue('telefoneSecundario' as any, formatted || undefined, { shouldDirty: true });
+  }, [telSecundarioDDD, telSecundarioNumero, setValue]);
 
   const handleFormSubmit = (data: EmployeeFormData) => {
     if (!foto) {
@@ -240,22 +261,60 @@ export function EmployeeForm({ onSubmit, onCancel, initialData }: EmployeeFormPr
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="telefonePrincipal">Telefone Principal</Label>
-              <Input
-                id="telefonePrincipal"
-                {...register('telefonePrincipal')}
-                className="mt-1.5"
-                placeholder="(99) 99999-9999"
-              />
+              <Label>Telefone Principal</Label>
+              <div className="mt-1.5 grid grid-cols-3 gap-2">
+                <Input
+                  id="telefonePrincipalDDD"
+                  placeholder="DDD"
+                  inputMode="numeric"
+                  maxLength={2}
+                  {...register('telefonePrincipalDDD' as any)}
+                  onChange={(e) => {
+                    const digits = e.target.value.replace(/\D/g, '').slice(0, 2);
+                    setValue('telefonePrincipalDDD' as any, digits, { shouldDirty: true });
+                  }}
+                />
+                <Input
+                  id="telefonePrincipalNumero"
+                  className="col-span-2"
+                  placeholder="Número"
+                  inputMode="numeric"
+                  maxLength={9}
+                  {...register('telefonePrincipalNumero' as any)}
+                  onChange={(e) => {
+                    const digits = e.target.value.replace(/\D/g, '').slice(0, 9);
+                    setValue('telefonePrincipalNumero' as any, digits, { shouldDirty: true });
+                  }}
+                />
+              </div>
             </div>
             <div>
-              <Label htmlFor="telefoneSecundario">Telefone Secundário</Label>
-              <Input
-                id="telefoneSecundario"
-                {...register('telefoneSecundario')}
-                className="mt-1.5"
-                placeholder="(99) 99999-9999"
-              />
+              <Label>Telefone Secundário</Label>
+              <div className="mt-1.5 grid grid-cols-3 gap-2">
+                <Input
+                  id="telefoneSecundarioDDD"
+                  placeholder="DDD"
+                  inputMode="numeric"
+                  maxLength={2}
+                  {...register('telefoneSecundarioDDD' as any)}
+                  onChange={(e) => {
+                    const digits = e.target.value.replace(/\D/g, '').slice(0, 2);
+                    setValue('telefoneSecundarioDDD' as any, digits, { shouldDirty: true });
+                  }}
+                />
+                <Input
+                  id="telefoneSecundarioNumero"
+                  className="col-span-2"
+                  placeholder="Número"
+                  inputMode="numeric"
+                  maxLength={9}
+                  {...register('telefoneSecundarioNumero' as any)}
+                  onChange={(e) => {
+                    const digits = e.target.value.replace(/\D/g, '').slice(0, 9);
+                    setValue('telefoneSecundarioNumero' as any, digits, { shouldDirty: true });
+                  }}
+                />
+              </div>
             </div>
           </div>
 
@@ -446,7 +505,7 @@ export function EmployeeForm({ onSubmit, onCancel, initialData }: EmployeeFormPr
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmOpen(false)}>Voltar</Button>
-            <Button type="submit" onClick={() => setConfirmOpen(false)}>Confirmar</Button>
+            <Button type="button" onClick={() => { setConfirmOpen(false); handleSubmit(handleFormSubmit)(); }}>Confirmar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
