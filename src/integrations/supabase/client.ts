@@ -2,28 +2,25 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-
-// Debug: verificar variáveis de ambiente
-console.log('Environment variables:', {
-  VITE_SUPABASE_URL: SUPABASE_URL,
-  VITE_SUPABASE_PUBLISHABLE_KEY: SUPABASE_PUBLISHABLE_KEY ? 'Definida' : 'Não definida'
-});
-
-// Verificar se as variáveis estão definidas
-if (!SUPABASE_URL) {
-  console.error('VITE_SUPABASE_URL não está definida');
-  console.error('Valores disponíveis:', import.meta.env);
-  throw new Error('VITE_SUPABASE_URL is required');
+declare global {
+  interface Window {
+    __ENV__?: {
+      VITE_SUPABASE_URL?: string;
+      VITE_SUPABASE_PUBLISHABLE_KEY?: string;
+    };
+  }
 }
 
-if (!SUPABASE_PUBLISHABLE_KEY) {
-  console.error('VITE_SUPABASE_PUBLISHABLE_KEY não está definida');
-  throw new Error('VITE_SUPABASE_PUBLISHABLE_KEY is required');
+const runtimeEnv = (typeof window !== 'undefined' && window.__ENV__) || {};
+const SUPABASE_URL = runtimeEnv.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_PUBLISHABLE_KEY = runtimeEnv.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
+if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
+  console.error('Configuração do Supabase ausente. Defina VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY.');
+  throw new Error('Supabase configuration is required');
 }
 
-export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+export const supabase = createClient<Database>(SUPABASE_URL as string, SUPABASE_PUBLISHABLE_KEY as string, {
   auth: {
     storage: localStorage,
     persistSession: true,

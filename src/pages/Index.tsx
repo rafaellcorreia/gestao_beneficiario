@@ -144,7 +144,7 @@ const Index = () => {
                 <h1 className="text-3xl md:text-4xl font-bold text-white leading-tight">
                   Sistema de Controle de Beneficiários
                 </h1>
-                <p className="textшите md:text-lg text-white/90 mt-2">
+                <p className="text-sm md:text-lg text-white/90 mt-2">
                   Gestão diária de registros e frequências - Prefeitura Municipal de Nossa Senhora do Socorro
                 </p>
               </div>
