@@ -18,6 +18,25 @@
   </head>
 
   <body>
+    <noscript>
+      <div style="padding:16px;background:#fee;border:1px solid #f99;color:#900;margin:8px;">
+        JavaScript está desabilitado. Ative o JavaScript para usar este aplicativo.
+      </div>
+    </noscript>
+    <script>
+      window.addEventListener('error', function(e){
+        const el = document.createElement('div');
+        el.style.cssText = 'padding:12px;background:#fee;border:1px solid #f99;color:#900;margin:8px;font-family:system-ui,Segoe UI,Arial';
+        el.textContent = 'Erro de execução: ' + (e.error && e.error.message ? e.error.message : e.message);
+        document.body.prepend(el);
+      });
+      window.addEventListener('unhandledrejection', function(e){
+        const el = document.createElement('div');
+        el.style.cssText = 'padding:12px;background:#fee;border:1px solid #f99;color:#900;margin:8px;font-family:system-ui,Segoe UI,Arial';
+        el.textContent = 'Promessa não tratada: ' + (e.reason && e.reason.message ? e.reason.message : String(e.reason));
+        document.body.prepend(el);
+      });
+    </script>
     <div id="root"></div>
     <script src="./env.js"></script>
     <script type="module" src="/src/main.tsx"></script>
