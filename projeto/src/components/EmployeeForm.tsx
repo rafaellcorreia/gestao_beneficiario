@@ -3,6 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -29,6 +30,8 @@ const employeeSchema = z.object({
   dataRecebimento: z.date().refine(validarDataRecebimento, "Data não pode ser futura"),
   statusVida: z.enum(["Vivo", "Morto", "Preso", "Enfermo", "Licença Maternidade", "Devolvido", "Concludente", "Aguardando Sentença"]),
   localLotacao: z.string().min(1, "Local de lotação é obrigatório"),
+  telefonePrincipal: z.string().optional(),
+  telefoneSecundario: z.string().optional(),
   horasCumpridas: z.number().min(0, "Horas cumpridas não podem ser negativas"),
   horasRestantes: z.number().min(0, "Horas restantes não podem ser negativas"),
   observacaoInicial: z.string().optional(),
@@ -52,6 +55,9 @@ export function EmployeeForm({ onSubmit, onCancel, initialData }: EmployeeFormPr
   const [fotoPreview, setFotoPreview] = useState<string | null>(null);
   const [frequenciaPDF, setFrequenciaPDF] = useState<File | null>(null);
   const [documentacaoPDF, setDocumentacaoPDF] = useState<File | null>(null);
+  const [horasIniciais, setHorasIniciais] = useState<number>(0);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [horasIniciais, setHorasIniciais] = useState<number>(0);
 
   const {
     register,
@@ -65,6 +71,16 @@ export function EmployeeForm({ onSubmit, onCancel, initialData }: EmployeeFormPr
   });
 
   const dataRecebimento = watch("dataRecebimento");
+  const horasCumpridasWatch = watch('horasCumpridas');
+  const horasRestantesWatch = watch('horasRestantes');
+
+  // Define o total inicial na primeira mudança
+  useEffect(() => {
+    const total = (Number(horasCumpridasWatch) || 0) + (Number(horasRestantesWatch) || 0);
+    if (total > 0 && horasIniciais === 0) {
+      setHorasIniciais(total);
+    }
+  }, [horasCumpridasWatch, horasRestantesWatch, horasIniciais]);
 
   const handleFormSubmit = (data: EmployeeFormData) => {
     if (!foto) {
@@ -152,35 +168,51 @@ export function EmployeeForm({ onSubmit, onCancel, initialData }: EmployeeFormPr
               <Label htmlFor="dataRecebimento">
                 Data de Recebimento <span className="text-destructive">*</span>
               </Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className="w-full justify-start text-left font-normal mt-1.5"
-                    type="button"
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {dataRecebimento ? (
-                      format(dataRecebimento, "PPP", { locale: ptBR })
-                    ) : (
-                      <span className="text-muted-foreground">Selecione uma data</span>
-                    )}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0 bg-popover" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={dataRecebimento}
-                    onSelect={(date) => setValue("dataRecebimento", date as Date)}
-                    disabled={(date) => date > new Date()}
-                    initialFocus
-                    locale={ptBR}
-                    className="pointer-events-auto"
-                  />
-                </PopoverContent>
-              </Popover>
+              <div className="mt-1.5 flex gap-2">
+                <Input
+                  id="dataRecebimento"
+                  type="date"
+                  value={dataRecebimento ? format(dataRecebimento, 'yyyy-MM-dd') : ''}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value) {
+                      const parsed = new Date(value + 'T00:00:00');
+                      if (!isNaN(parsed.getTime())) {
+                        setValue('dataRecebimento', parsed, { shouldValidate: true, shouldDirty: true });
+                      }
+                    } else {
+                      setValue('dataRecebimento', undefined as unknown as Date, { shouldValidate: true, shouldDirty: true });
+                    }
+                  }}
+                  aria-invalid={!!errors.dataRecebimento}
+                  aria-describedby={errors.dataRecebimento ? 'data-recebimento-error' : undefined}
+                />
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="shrink-0"
+                      type="button"
+                      aria-label="Abrir calendário"
+                    >
+                      <CalendarIcon className="h-4 w-4" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0 bg-popover" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={dataRecebimento}
+                      onSelect={(date) => setValue('dataRecebimento', date as Date, { shouldValidate: true, shouldDirty: true })}
+                      disabled={(date) => date > new Date()}
+                      initialFocus
+                      locale={ptBR}
+                      className="pointer-events-auto"
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
               {errors.dataRecebimento && (
-                <p className="text-sm text-destructive mt-1">
+                <p id="data-recebimento-error" className="text-sm text-destructive mt-1">
                   {errors.dataRecebimento.message}
                 </p>
               )}
@@ -208,13 +240,46 @@ export function EmployeeForm({ onSubmit, onCancel, initialData }: EmployeeFormPr
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
+              <Label htmlFor="telefonePrincipal">Telefone Principal</Label>
+              <Input
+                id="telefonePrincipal"
+                {...register('telefonePrincipal')}
+                className="mt-1.5"
+                placeholder="(99) 99999-9999"
+              />
+            </div>
+            <div>
+              <Label htmlFor="telefoneSecundario">Telefone Secundário</Label>
+              <Input
+                id="telefoneSecundario"
+                {...register('telefoneSecundario')}
+                className="mt-1.5"
+                placeholder="(99) 99999-9999"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
               <Label htmlFor="horasCumpridas">
                 Horas Cumpridas <span className="text-destructive">*</span>
               </Label>
               <Input
                 id="horasCumpridas"
                 type="number"
-                {...register("horasCumpridas", { valueAsNumber: true })}
+                {...register("horasCumpridas", { 
+                  valueAsNumber: true,
+                  onChange: (e) => {
+                    const valor = parseInt(e.target.value || '0', 10);
+                    // Atualiza horas restantes automaticamente se total conhecido
+                    const total = horasIniciais || ((Number(horasCumpridasWatch) || 0) + (Number(horasRestantesWatch) || 0));
+                    if (total > 0) {
+                      const novasRestantes = Math.max(0, total - (isNaN(valor) ? 0 : valor));
+                      setValue('horasRestantes', novasRestantes, { shouldValidate: true, shouldDirty: true });
+                      if (horasIniciais === 0) setHorasIniciais(total);
+                    }
+                  }
+                })}
                 className="mt-1.5"
                 placeholder="0"
                 min="0"
@@ -357,10 +422,34 @@ export function EmployeeForm({ onSubmit, onCancel, initialData }: EmployeeFormPr
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancelar
         </Button>
-        <Button type="submit" className="bg-primary hover:bg-primary-hover">
-          Salvar Registro
+        <Button type="button" className="bg-primary hover:bg-primary-hover" onClick={() => setConfirmOpen(true)}>
+          Revisar e Confirmar
         </Button>
       </div>
+
+      {/* Diálogo de confirmação */}
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirmar cadastro do beneficiário</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 text-sm">
+            <p><strong>Nome:</strong> {watch('nome') || '-'} </p>
+            <p><strong>Nº Processo:</strong> {watch('numeroProcesso') || '-'}</p>
+            <p><strong>Data de recebimento:</strong> {dataRecebimento ? format(dataRecebimento, 'dd/MM/yyyy') : '-'}</p>
+            <p><strong>Local de lotação:</strong> {watch('localLotacao') || '-'}</p>
+            <p><strong>Telefone principal:</strong> {watch('telefonePrincipal') || '-'}</p>
+            <p><strong>Telefone secundário:</strong> {watch('telefoneSecundario') || '-'}</p>
+            <p><strong>Status:</strong> {watch('statusVida') || '-'}</p>
+            <p><strong>Horas cumpridas:</strong> {watch('horasCumpridas') ?? 0}</p>
+            <p><strong>Horas restantes:</strong> {watch('horasRestantes') ?? 0}</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmOpen(false)}>Voltar</Button>
+            <Button type="submit" onClick={() => setConfirmOpen(false)}>Confirmar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </form>
   );
 }

@@ -59,6 +59,8 @@ export function useBeneficiarios() {
             fotoUrl: b.foto_url,
             numeroProcesso: b.numero_processo,
             dataRecebimento: new Date(b.data_recebimento),
+            telefonePrincipal: b.telefone_principal || undefined,
+            telefoneSecundario: b.telefone_secundario || undefined,
             horasCumpridas: b.horas_cumpridas || 0,
             horasRestantes: b.horas_restantes || 0,
             frequencias: [], // Array vazio por enquanto
@@ -100,6 +102,21 @@ export function useBeneficiarios() {
       }
 
       console.log('Iniciando criação de beneficiário:', { nome: data.nome, temFoto: !!data.foto, temFrequenciaPDF: !!data.frequenciaPDF, temDocumentacaoPDF: !!data.documentacaoPDF });
+
+      // Checagem de duplicidade (mesmo número de processo ou mesmo nome do usuário atual)
+      const { data: existentes, error: dupErr } = await supabase
+        .from('beneficiarios')
+        .select('id, nome, numero_processo')
+        .eq('user_id', user.id)
+        .or(`numero_processo.eq.${data.numeroProcesso},nome.ilike.%${data.nome}%`)
+        .limit(1);
+      if (dupErr) {
+        console.warn('Erro ao checar duplicidade:', dupErr);
+      }
+      if (existentes && existentes.length > 0) {
+        toast.error('Já existe um beneficiário com os mesmos dados. Revise antes de confirmar.');
+        return { success: false, error: 'duplicado' };
+      }
 
       // Upload da foto se existir
       let fotoUrl = data.fotoPreview;
@@ -191,14 +208,19 @@ export function useBeneficiarios() {
 
       console.log('Inserindo beneficiário no banco de dados...');
       
+      const isoDate = new Date(data.dataRecebimento);
+      const dataSql = isNaN(isoDate.getTime()) ? null : isoDate.toISOString().slice(0, 10);
+
       const { data: newBenef, error } = await supabase.from("beneficiarios").insert({
         user_id: user.id,
         nome: data.nome,
         foto_url: fotoUrl,
         numero_processo: data.numeroProcesso,
-        data_recebimento: data.dataRecebimento,
+        data_recebimento: dataSql,
         status_vida: data.statusVida,
         local_lotacao: data.localLotacao,
+        telefone_principal: data.telefonePrincipal || null,
+        telefone_secundario: data.telefoneSecundario || null,
         horas_cumpridas: data.horasCumpridas,
         horas_restantes: data.horasRestantes,
         frequencia_pdf_url: frequenciaPdfUrl,

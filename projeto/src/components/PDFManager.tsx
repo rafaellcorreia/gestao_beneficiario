@@ -78,6 +78,16 @@ export function PDFManager({ beneficiarioId, documentos, onUpdate }: PDFManagerP
         throw dbError;
       }
 
+      // Atualizar atalho no registro do beneficiário
+      const colunaAtalho = uploadType === 'frequencia' ? 'frequencia_pdf_url' : 'documentacao_pdf_url';
+      const { error: updErr } = await supabase
+        .from('beneficiarios')
+        .update({ [colunaAtalho]: publicUrl })
+        .eq('id', beneficiarioId);
+      if (updErr) {
+        console.warn('Falha ao atualizar atalho de PDF no beneficiário:', updErr);
+      }
+
       toast.success("PDF enviado com sucesso!");
       setIsUploadOpen(false);
       setUploadingFile(null);

@@ -39,6 +39,8 @@ export interface Beneficiario {
   fotoUrl: string;
   numeroProcesso: string;
   dataRecebimento: Date;
+  telefonePrincipal?: string;
+  telefoneSecundario?: string;
   horasCumpridas: number;
   horasRestantes: number;
   frequencias: Frequencia[];
@@ -90,6 +92,8 @@ export interface CreateBeneficiarioDTO {
   dataRecebimento: Date;
   statusVida: StatusVida;
   localLotacao: string;
+  telefonePrincipal?: string;
+  telefoneSecundario?: string;
   horasCumpridas: number;
   horasRestantes: number;
   observacaoInicial?: string;
