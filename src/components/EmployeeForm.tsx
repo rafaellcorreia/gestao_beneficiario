@@ -108,6 +108,9 @@ export function EmployeeForm({ onSubmit, onCancel, initialData }: EmployeeFormPr
       return;
     }
 
+    // Fecha o diálogo de confirmação somente após validação bem sucedida
+    setConfirmOpen(false);
+
     onSubmit({ 
       ...data, 
       foto, 
@@ -504,7 +507,7 @@ export function EmployeeForm({ onSubmit, onCancel, initialData }: EmployeeFormPr
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmOpen(false)}>Voltar</Button>
-            <Button type="button" onClick={() => { setConfirmOpen(false); handleSubmit(handleFormSubmit)(); }}>Confirmar</Button>
+            <Button type="submit">Confirmar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
