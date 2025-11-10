@@ -56,9 +56,10 @@ export function ObservationsManager({ beneficiarioId, observacoes, onUpdate }: O
       setNewObservacao("");
       setIsAddOpen(false);
       onUpdate();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Erro ao adicionar observação:", error);
-      toast.error("Erro ao adicionar observação: " + error.message);
+      const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
+      toast.error("Erro ao adicionar observação: " + errorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -82,9 +83,10 @@ export function ObservationsManager({ beneficiarioId, observacoes, onUpdate }: O
       setEditingId(null);
       setEditingText("");
       onUpdate();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Erro ao editar observação:", error);
-      toast.error("Erro ao editar observação: " + error.message);
+      const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
+      toast.error("Erro ao editar observação: " + errorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -105,9 +107,10 @@ export function ObservationsManager({ beneficiarioId, observacoes, onUpdate }: O
 
       toast.success("Observação excluída com sucesso!");
       onUpdate();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Erro ao excluir observação:", error);
-      toast.error("Erro ao excluir observação: " + error.message);
+      const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
+      toast.error("Erro ao excluir observação: " + errorMessage);
     }
   };
 

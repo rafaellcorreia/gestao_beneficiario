@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Beneficiario, DocumentoPDF, Observacao } from "@/types/employee";
-import { calcularHorasRestantes } from "@/lib/validations";
+import { Beneficiario, DocumentoPDF, Observacao, StatusVida } from "@/types/employee";
 import { toast } from "sonner";
 
 export function useBeneficiarios() {
@@ -64,7 +63,7 @@ export function useBeneficiarios() {
             horasCumpridas: b.horas_cumpridas || 0,
             horasRestantes: b.horas_restantes || 0,
             frequencias: [], // Array vazio por enquanto
-            statusVida: b.status_vida as any,
+            statusVida: b.status_vida as StatusVida,
             observacoes,
             localLotacao: b.local_lotacao || 'Não informado',
             frequenciaPDFUrl: b.frequencia_pdf_url,
@@ -80,9 +79,10 @@ export function useBeneficiarios() {
       );
 
       setBeneficiarios(beneficiariosComDocumentos);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Erro ao buscar beneficiários:", error);
-      toast.error("Erro ao carregar dados: " + error.message);
+      const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
+      toast.error("Erro ao carregar dados: " + errorMessage);
     } finally {
       setLoading(false);
     }
@@ -92,7 +92,22 @@ export function useBeneficiarios() {
     fetchBeneficiarios();
   }, []);
 
-  const createBeneficiario = async (data: any) => {
+  const createBeneficiario = async (data: {
+    nome: string;
+    numeroProcesso: string;
+    dataRecebimento: Date;
+    statusVida: StatusVida;
+    localLotacao: string;
+    telefonePrincipal?: string;
+    telefoneSecundario?: string;
+    horasCumpridas: number;
+    horasRestantes: number;
+    observacaoInicial?: string;
+    foto: File;
+    fotoPreview: string;
+    frequenciaPDF?: File;
+    documentacaoPDF?: File;
+  }) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       
@@ -253,20 +268,23 @@ export function useBeneficiarios() {
       await fetchBeneficiarios();
       toast.success("Registro salvo com sucesso!");
       return { success: true };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Erro ao criar beneficiário:", error);
       
       // Tratamento específico de erros
       let errorMessage = "Erro desconhecido ao salvar";
       
-      if (error.message?.includes("bucket")) {
-        errorMessage = "Erro de configuração de armazenamento. Verifique as configurações.";
-      } else if (error.message?.includes("policy")) {
-        errorMessage = "Erro de permissão. Verifique as configurações de acesso.";
-      } else if (error.message?.includes("relation")) {
-        errorMessage = "Erro de banco de dados. Tabela não encontrada.";
-      } else if (error.message) {
-        errorMessage = error.message;
+      if (error instanceof Error) {
+        const message = error.message;
+        if (message.includes("bucket")) {
+          errorMessage = "Erro de configuração de armazenamento. Verifique as configurações.";
+        } else if (message.includes("policy")) {
+          errorMessage = "Erro de permissão. Verifique as configurações de acesso.";
+        } else if (message.includes("relation")) {
+          errorMessage = "Erro de banco de dados. Tabela não encontrada.";
+        } else {
+          errorMessage = message;
+        }
       }
       
       toast.error("Erro ao salvar: " + errorMessage);
@@ -286,10 +304,11 @@ export function useBeneficiarios() {
       await fetchBeneficiarios();
       toast.success("Beneficiário excluído com sucesso!");
       return { success: true };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Erro ao excluir beneficiário:", error);
-      toast.error("Erro ao excluir beneficiário: " + error.message);
-      return { success: false, error: error.message };
+      const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
+      toast.error("Erro ao excluir beneficiário: " + errorMessage);
+      return { success: false, error: errorMessage };
     }
   };
 

@@ -18,8 +18,7 @@ import { EditHoursDialog } from "@/components/EditHoursDialog";
 import { PDFManager } from "@/components/PDFManager";
 import { ObservationsManager } from "@/components/ObservationsManager";
 import { ArquivoDigitalFixed } from "@/components/ArquivoDigitalFixed";
-import { Beneficiario } from "@/types/employee";
-import { formatarCPF, mascaraCPF } from "@/lib/validations";
+import { Beneficiario, FiltrosAplicados } from "@/types/employee";
 import { useBeneficiarios } from "@/hooks/useBeneficiarios";
 
 const Index = () => {
@@ -33,14 +32,14 @@ const Index = () => {
   const [isEditHoursOpen, setIsEditHoursOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [beneficiarioToDelete, setBeneficiarioToDelete] = useState<Beneficiario | null>(null);
-  const [filters, setFilters] = useState<any>({
+  const [filters, setFilters] = useState<FiltrosAplicados>({
     status: null,
     horasMin: null,
     dataInicio: null,
     dataFim: null,
   });
 
-  const handleCreateEmployee = async (data: any) => {
+  const handleCreateEmployee = async (data: Parameters<typeof createBeneficiario>[0]) => {
     const result = await createBeneficiario(data);
     if (result.success) {
       setIsFormOpen(false);

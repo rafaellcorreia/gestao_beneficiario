@@ -64,9 +64,10 @@ export function EditHoursDialog({ open, onOpenChange, beneficiario, onUpdate }: 
       toast.success("Horas atualizadas com sucesso!");
       onUpdate();
       onOpenChange(false);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Erro ao atualizar horas:", error);
-      toast.error("Erro ao atualizar horas: " + error.message);
+      const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
+      toast.error("Erro ao atualizar horas: " + errorMessage);
     } finally {
       setLoading(false);
     }

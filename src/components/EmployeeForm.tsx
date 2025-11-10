@@ -120,6 +120,23 @@ export function EmployeeForm({ onSubmit, onCancel, initialData }: EmployeeFormPr
     });
   };
 
+  const handleReviewClick = () => {
+    // Valida o formulário antes de mostrar o dialog de confirmação
+    handleSubmit(
+      () => {
+        // Se válido, abre o dialog de confirmação
+        if (foto) {
+          setConfirmOpen(true);
+        } else {
+          toast.error("Por favor, capture ou faça upload de uma foto");
+        }
+      },
+      () => {
+        // Se inválido, o react-hook-form já mostra os erros
+      }
+    )();
+  };
+
   const handlePhotoCapture = (file: File, preview: string) => {
     setFoto(file);
     setFotoPreview(preview);
@@ -483,7 +500,7 @@ export function EmployeeForm({ onSubmit, onCancel, initialData }: EmployeeFormPr
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancelar
         </Button>
-        <Button type="button" className="bg-primary hover:bg-primary-hover" onClick={() => setConfirmOpen(true)}>
+        <Button type="button" className="bg-primary hover:bg-primary-hover" onClick={handleReviewClick}>
           Revisar e Confirmar
         </Button>
       </div>
@@ -507,7 +524,7 @@ export function EmployeeForm({ onSubmit, onCancel, initialData }: EmployeeFormPr
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmOpen(false)}>Voltar</Button>
-            <Button type="submit">Confirmar</Button>
+            <Button type="button" onClick={handleSubmit(handleFormSubmit)}>Confirmar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

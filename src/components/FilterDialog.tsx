@@ -15,12 +15,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { StatusVida } from "@/types/employee";
+import { StatusVida, FiltrosAplicados } from "@/types/employee";
 
 interface FilterDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onApplyFilters: (filters: any) => void;
+  onApplyFilters: (filters: FiltrosAplicados) => void;
 }
 
 export function FilterDialog({ open, onOpenChange, onApplyFilters }: FilterDialogProps) {
@@ -31,8 +31,8 @@ export function FilterDialog({ open, onOpenChange, onApplyFilters }: FilterDialo
 
   const handleApply = () => {
     onApplyFilters({
-      status: status === "todos" ? null : status,
-      lapsoMin: lapsoMin ? parseInt(lapsoMin) : null,
+      status: status === "todos" ? null : (status as StatusVida),
+      horasMin: lapsoMin ? parseInt(lapsoMin) : null,
       dataInicio: dataInicio || null,
       dataFim: dataFim || null,
     });
@@ -46,7 +46,7 @@ export function FilterDialog({ open, onOpenChange, onApplyFilters }: FilterDialo
     setDataFim("");
     onApplyFilters({
       status: null,
-      lapsoMin: null,
+      horasMin: null,
       dataInicio: null,
       dataFim: null,
     });
@@ -62,7 +62,7 @@ export function FilterDialog({ open, onOpenChange, onApplyFilters }: FilterDialo
         <div className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="status">Status de Vida</Label>
-            <Select value={status} onValueChange={(value: any) => setStatus(value)}>
+            <Select value={status} onValueChange={(value) => setStatus(value as StatusVida | "todos")}>
               <SelectTrigger id="status">
                 <SelectValue />
               </SelectTrigger>

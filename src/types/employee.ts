@@ -85,6 +85,13 @@ export interface FiltrosBeneficiario {
   localServico?: string;
 }
 
+export interface FiltrosAplicados {
+  status: StatusVida | null;
+  horasMin: number | null;
+  dataInicio: string | null;
+  dataFim: string | null;
+}
+
 export interface CreateBeneficiarioDTO {
   nome: string;
   foto: File;

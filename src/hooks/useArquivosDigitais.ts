@@ -48,10 +48,11 @@ export function useArquivosDigitais(ano?: number, categoria?: string) {
       }
 
       setArquivos(data || []);
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Erro ao buscar arquivos digitais:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido';
       setError('Erro ao carregar arquivos');
-      toast.error('Erro ao carregar arquivos digitais');
+      toast.error('Erro ao carregar arquivos digitais: ' + errorMessage);
     } finally {
       setLoading(false);
     }
@@ -111,9 +112,10 @@ export function useArquivosDigitais(ano?: number, categoria?: string) {
       toast.success('Arquivo enviado com sucesso!');
       await fetchArquivos();
       return { success: true };
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Erro no upload:', error);
-      toast.error('Erro ao enviar arquivo');
+      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+      toast.error('Erro ao enviar arquivo: ' + errorMessage);
       return { success: false, error };
     }
   };
@@ -147,9 +149,10 @@ export function useArquivosDigitais(ano?: number, categoria?: string) {
       toast.success('Arquivo excluído com sucesso!');
       await fetchArquivos();
       return { success: true };
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Erro ao excluir arquivo:', error);
-      toast.error('Erro ao excluir arquivo');
+      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+      toast.error('Erro ao excluir arquivo: ' + errorMessage);
       return { success: false, error };
     }
   };
@@ -167,9 +170,10 @@ export function useArquivosDigitais(ano?: number, categoria?: string) {
       }
 
       return data || [];
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Erro na busca:', error);
-      toast.error('Erro ao buscar arquivos');
+      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+      toast.error('Erro ao buscar arquivos: ' + errorMessage);
       return [];
     }
   };
@@ -186,8 +190,10 @@ export function useArquivosDigitais(ano?: number, categoria?: string) {
       }
 
       return data || [];
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Erro ao buscar estatísticas:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+      toast.error('Erro ao buscar estatísticas: ' + errorMessage);
       return [];
     }
   };

@@ -92,9 +92,10 @@ export function PDFManager({ beneficiarioId, documentos, onUpdate }: PDFManagerP
       setIsUploadOpen(false);
       setUploadingFile(null);
       onUpdate();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Erro ao fazer upload:", error);
-      toast.error("Erro ao fazer upload: " + error.message);
+      const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
+      toast.error("Erro ao fazer upload: " + errorMessage);
     } finally {
       setIsUploading(false);
     }
@@ -129,9 +130,10 @@ export function PDFManager({ beneficiarioId, documentos, onUpdate }: PDFManagerP
 
       toast.success("Documento excluído com sucesso!");
       onUpdate();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Erro ao excluir documento:", error);
-      toast.error("Erro ao excluir documento: " + error.message);
+      const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
+      toast.error("Erro ao excluir documento: " + errorMessage);
     }
   };
 

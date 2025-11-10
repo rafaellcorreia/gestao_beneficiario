@@ -95,8 +95,10 @@ export function ArquivoDigitalFixed() {
       }
 
       setArquivos(data || []);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Erro ao buscar arquivos:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+      toast.error('Erro ao buscar arquivos: ' + errorMessage);
       setArquivos([]);
     } finally {
       setLoading(false);
@@ -182,9 +184,10 @@ export function ArquivoDigitalFixed() {
         mes: new Date().getMonth() + 1,
       });
       fetchArquivos();
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Erro no upload:', error);
-      toast.error("Erro ao enviar arquivo");
+      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+      toast.error("Erro ao enviar arquivo: " + errorMessage);
     } finally {
       setIsUploading(false);
     }
@@ -222,9 +225,10 @@ export function ArquivoDigitalFixed() {
 
       toast.success("Arquivo excluído com sucesso!");
       fetchArquivos();
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Erro ao excluir arquivo:', error);
-      toast.error("Erro ao excluir arquivo");
+      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+      toast.error("Erro ao excluir arquivo: " + errorMessage);
     }
   };
 
