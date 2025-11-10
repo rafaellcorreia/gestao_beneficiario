@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Plus, Search, Filter, LogOut, FileText, Edit3, Trash2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -324,14 +324,21 @@ const Index = () => {
       </Dialog>
 
       {/* Dialog Detalhes */}
-      <Dialog open={!!selectedEmployee} onOpenChange={() => setSelectedEmployee(null)}>
+      <Dialog open={!!selectedEmployee} onOpenChange={(open) => {
+        if (!open) {
+          setSelectedEmployee(null);
+        }
+      }}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Detalhes do Beneficiário</DialogTitle>
           </DialogHeader>
           {selectedEmployee && (() => {
             // Buscar dados atualizados do beneficiário quando o diálogo é aberto
+            // Sempre buscar da lista atualizada de beneficiários
             const beneficiarioAtualizado = beneficiarios.find(b => b.id === selectedEmployee.id) || selectedEmployee;
+            console.log('📋 Index: Exibindo detalhes do beneficiário:', beneficiarioAtualizado.id, beneficiarioAtualizado.nome);
+            console.log('📄 Documentos PDF do beneficiário:', beneficiarioAtualizado.documentosPDF?.length || 0);
             return (
               <div className="space-y-4">
                 <div className="flex items-start gap-4">
@@ -384,15 +391,16 @@ const Index = () => {
                 {/* Documentos PDF */}
                 <div className="pt-4 border-t">
                   <PDFManager
+                    key={beneficiarioAtualizado.id} // Force re-render quando o beneficiário muda
                     beneficiarioId={beneficiarioAtualizado.id}
-                    documentos={beneficiarioAtualizado.documentosPDF}
+                    documentos={beneficiarioAtualizado.documentosPDF || []} // Garantir que seja um array
                     onUpdate={async () => {
+                      console.log('🔄 Index: Atualizando lista de beneficiários após mudança em PDFs...');
+                      // Atualizar a lista completa de beneficiários
                       await fetchBeneficiarios();
-                      // Atualizar selectedEmployee com dados atualizados
-                      const updated = beneficiarios.find(b => b.id === beneficiarioAtualizado.id);
-                      if (updated) {
-                        setSelectedEmployee(updated);
-                      }
+                      console.log('✅ Index: Lista de beneficiários atualizada');
+                      // O PDFManager já busca os documentos diretamente do banco,
+                      // então não precisamos atualizar o selectedEmployee manualmente
                     }}
                   />
                 </div>

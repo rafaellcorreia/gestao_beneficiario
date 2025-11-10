@@ -21,7 +21,7 @@ export function useBeneficiarios() {
       const beneficiariosComDocumentos = await Promise.all(
         (data || []).map(async (b) => {
           // Buscar documentos PDF
-          console.log(`Buscando documentos PDF para beneficiário ${b.id} (${b.nome})...`);
+          console.log(`🔍 Buscando documentos PDF para beneficiário ${b.id} (${b.nome})...`);
           const { data: documentosData, error: documentosError } = await supabase
             .from("documentos_pdf")
             .select("*")
@@ -29,24 +29,38 @@ export function useBeneficiarios() {
             .order("data_anexacao", { ascending: false });
 
           if (documentosError) {
-            console.error(`Erro ao buscar documentos para beneficiário ${b.id}:`, documentosError);
+            console.error(`❌ Erro ao buscar documentos para beneficiário ${b.id}:`, documentosError);
+            console.error('Código do erro:', documentosError.code);
+            console.error('Mensagem do erro:', documentosError.message);
           } else {
-            console.log(`Documentos encontrados para beneficiário ${b.id}:`, documentosData?.length || 0);
+            console.log(`✅ Documentos encontrados para beneficiário ${b.id}:`, documentosData?.length || 0);
             if (documentosData && documentosData.length > 0) {
-              console.log('Dados dos documentos:', documentosData);
+              console.log('📄 Detalhes dos documentos:', documentosData.map(d => ({
+                id: d.id,
+                nome: d.nome,
+                tipo: d.tipo,
+                beneficiario_id: d.beneficiario_id
+              })));
             }
           }
 
           const documentosPDF: DocumentoPDF[] = (documentosData || []).map((doc) => {
+            // Garantir que dataAnexacao seja uma data válida
+            const dataAnexacao = doc.data_anexacao 
+              ? new Date(doc.data_anexacao) 
+              : (doc.criado_em ? new Date(doc.criado_em) : new Date());
+            
             return {
               id: doc.id,
               nome: doc.nome,
               url: doc.url,
               tipo: doc.tipo,
-              dataAnexacao: new Date(doc.data_anexacao),
-              usuario: doc.usuario,
+              dataAnexacao: dataAnexacao,
+              usuario: doc.usuario || 'Usuário desconhecido',
             };
           });
+          
+          console.log(`✅ Documentos mapeados para beneficiário ${b.id}:`, documentosPDF.length);
 
           // Buscar observações
           const { data: observacoesData } = await supabase

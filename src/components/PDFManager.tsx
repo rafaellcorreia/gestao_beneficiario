@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,68 +25,111 @@ export function PDFManager({ beneficiarioId, documentos, onUpdate }: PDFManagerP
   const [uploadingFile, setUploadingFile] = useState<File | null>(null);
   const [uploadType, setUploadType] = useState<'frequencia' | 'documentacao'>('frequencia');
   const [isUploading, setIsUploading] = useState(false);
-  const [documentosList, setDocumentosList] = useState<DocumentoPDF[]>(documentos);
+  const [documentosList, setDocumentosList] = useState<DocumentoPDF[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Função para buscar documentos do banco
-  const fetchDocumentos = async () => {
+  // Função para buscar documentos do banco (sempre busca diretamente, ignora prop)
+  // Usando useCallback para memoizar e evitar recriações desnecessárias
+  const fetchDocumentos = useCallback(async () => {
     if (!beneficiarioId) {
-      console.log('fetchDocumentos: beneficiarioId não fornecido');
+      console.log('⚠️ fetchDocumentos: beneficiarioId não fornecido');
       setDocumentosList([]);
+      setError(null);
       return;
     }
     
     try {
       setLoading(true);
-      console.log('=== BUSCANDO DOCUMENTOS PDF ===');
-      console.log('Beneficiário ID:', beneficiarioId);
+      setError(null);
+      console.log('🔍 === BUSCANDO DOCUMENTOS PDF DO BANCO ===');
+      console.log('📋 Beneficiário ID:', beneficiarioId);
       
-      const { data: documentosData, error } = await supabase
+      // Verificar autenticação
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) {
+        console.error('❌ Erro de autenticação:', authError);
+        setError('Usuário não autenticado');
+        setDocumentosList([]);
+        return;
+      }
+      console.log('✅ Usuário autenticado:', user.email);
+      
+      // Buscar documentos do banco
+      // Buscar todos os campos e ordenar pela data mais recente (data_anexacao ou criado_em)
+      const { data: documentosData, error: queryError } = await supabase
         .from('documentos_pdf')
         .select('*')
         .eq('beneficiario_id', beneficiarioId)
         .order('data_anexacao', { ascending: false });
 
-      if (error) {
-        console.error('=== ERRO AO BUSCAR DOCUMENTOS ===');
-        console.error('Código do erro:', error.code);
-        console.error('Mensagem do erro:', error.message);
-        console.error('Detalhes do erro:', error.details);
+      if (queryError) {
+        console.error('❌ === ERRO AO BUSCAR DOCUMENTOS ===');
+        console.error('Código do erro:', queryError.code);
+        console.error('Mensagem do erro:', queryError.message);
+        console.error('Detalhes do erro:', queryError.details);
+        console.error('Hint do erro:', queryError.hint);
+        setError(`Erro ao buscar documentos: ${queryError.message}`);
         setDocumentosList([]);
         return;
       }
 
-      console.log('Documentos encontrados:', documentosData?.length || 0);
-      console.log('Dados dos documentos:', documentosData);
+      console.log('✅ Documentos encontrados no banco:', documentosData?.length || 0);
+      if (documentosData && documentosData.length > 0) {
+        console.log('📄 Dados dos documentos:', JSON.stringify(documentosData, null, 2));
+      } else {
+        console.log('⚠️ Nenhum documento encontrado para este beneficiário');
+      }
 
       const documentosPDF: DocumentoPDF[] = (documentosData || []).map((doc) => {
-        console.log('Mapeando documento:', doc);
+        // Usar data_anexacao se existir, senão usar criado_em, senão usar data atual
+        const dataAnexacao = doc.data_anexacao 
+          ? new Date(doc.data_anexacao) 
+          : (doc.criado_em ? new Date(doc.criado_em) : new Date());
+        
+        console.log('🔄 Mapeando documento:', {
+          id: doc.id,
+          nome: doc.nome,
+          tipo: doc.tipo,
+          url: doc.url?.substring(0, 50) + '...',
+          dataAnexacao: dataAnexacao.toISOString(),
+          usuario: doc.usuario
+        });
+        
         return {
           id: doc.id,
           nome: doc.nome,
           url: doc.url,
           tipo: doc.tipo,
-          dataAnexacao: new Date(doc.data_anexacao),
-          usuario: doc.usuario,
+          dataAnexacao: dataAnexacao,
+          usuario: doc.usuario || 'Usuário desconhecido',
         };
       });
 
-      console.log('Documentos mapeados:', documentosPDF.length);
+      console.log('✅ Documentos mapeados com sucesso:', documentosPDF.length);
       setDocumentosList(documentosPDF);
+      setError(null);
     } catch (error) {
-      console.error('=== ERRO COMPLETO AO BUSCAR DOCUMENTOS ===');
+      console.error('❌ === ERRO COMPLETO AO BUSCAR DOCUMENTOS ===');
       console.error('Erro:', error);
+      setError(`Erro inesperado: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
       setDocumentosList([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [beneficiarioId]);
 
   // Buscar documentos quando o componente é montado ou beneficiarioId muda
+  // SEMPRE busca do banco, ignora a prop 'documentos' que pode estar desatualizada
   useEffect(() => {
-    fetchDocumentos();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [beneficiarioId]);
+    if (beneficiarioId) {
+      console.log('🔄 PDFManager: Beneficiário ID mudou, buscando documentos...', beneficiarioId);
+      fetchDocumentos();
+    } else {
+      setDocumentosList([]);
+      setError(null);
+    }
+  }, [beneficiarioId, fetchDocumentos]);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -141,17 +184,20 @@ export function PDFManager({ beneficiarioId, documentos, onUpdate }: PDFManagerP
       console.log('URL pública gerada:', publicUrl);
 
       // Salvar referência no banco
-      console.log('Salvando referência no banco de dados...');
+      console.log('💾 Salvando referência no banco de dados...');
+      const agora = new Date().toISOString();
       const documentoData = {
         beneficiario_id: beneficiarioId,
         nome: uploadingFile.name,
         url: publicUrl,
         tipo: uploadType,
-        usuario: user.email || 'Usuário',
-        data_anexacao: new Date().toISOString(),
+        usuario: user.email || user.id || 'Usuário desconhecido',
+        data_anexacao: agora,
+        criado_em: agora,
+        atualizado_em: agora,
       };
       
-      console.log('Dados do documento a inserir:', documentoData);
+      console.log('📋 Dados do documento a inserir:', JSON.stringify(documentoData, null, 2));
       
       const { data: insertedData, error: dbError } = await supabase
         .from('documentos_pdf')
@@ -186,14 +232,19 @@ export function PDFManager({ beneficiarioId, documentos, onUpdate }: PDFManagerP
       setIsUploadOpen(false);
       setUploadingFile(null);
       
-      // Atualizar lista de documentos
-      console.log('Atualizando lista de documentos...');
+      // Atualizar lista de documentos IMEDIATAMENTE
+      console.log('🔄 Atualizando lista de documentos após upload...');
       await fetchDocumentos();
-      console.log('Lista de documentos atualizada');
+      console.log('✅ Lista de documentos atualizada');
       
-      // Chamar callback para atualizar dados do beneficiário
-      onUpdate();
-      console.log('=== UPLOAD CONCLUÍDO COM SUCESSO ===');
+      // Atualizar lista de beneficiários
+      console.log('🔄 Atualizando lista de beneficiários...');
+      await onUpdate();
+      
+      // Buscar documentos novamente após atualizar beneficiários para garantir sincronização
+      console.log('🔄 Re-buscando documentos após atualizar beneficiários...');
+      await fetchDocumentos();
+      console.log('✅ === UPLOAD CONCLUÍDO COM SUCESSO ===');
     } catch (error: unknown) {
       console.error("=== ERRO COMPLETO AO FAZER UPLOAD ===");
       console.error("Erro:", error);
@@ -232,10 +283,20 @@ export function PDFManager({ beneficiarioId, documentos, onUpdate }: PDFManagerP
       }
 
       toast.success("Documento excluído com sucesso!");
-      // Atualizar lista de documentos
+      
+      // Atualizar lista de documentos IMEDIATAMENTE
+      console.log('🔄 Atualizando lista de documentos após exclusão...');
       await fetchDocumentos();
-      // Chamar callback para atualizar dados do beneficiário
-      onUpdate();
+      console.log('✅ Lista de documentos atualizada');
+      
+      // Atualizar lista de beneficiários
+      console.log('🔄 Atualizando lista de beneficiários...');
+      await onUpdate();
+      
+      // Buscar documentos novamente após atualizar beneficiários para garantir sincronização
+      console.log('🔄 Re-buscando documentos após atualizar beneficiários...');
+      await fetchDocumentos();
+      console.log('✅ === EXCLUSÃO CONCLUÍDA COM SUCESSO ===');
     } catch (error: unknown) {
       console.error("Erro ao excluir documento:", error);
       const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
@@ -244,48 +305,97 @@ export function PDFManager({ beneficiarioId, documentos, onUpdate }: PDFManagerP
   };
 
   // Ordenar documentos por data de anexação (mais recente primeiro)
-  const documentosOrdenados = [...documentosList].sort((a, b) => 
-    new Date(b.dataAnexacao).getTime() - new Date(a.dataAnexacao).getTime()
-  );
+  // Já vem ordenado do banco, mas garantimos aqui também
+  const documentosOrdenados = [...documentosList].sort((a, b) => {
+    const dataA = a.dataAnexacao?.getTime() || 0;
+    const dataB = b.dataAnexacao?.getTime() || 0;
+    return dataB - dataA;
+  });
 
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <h4 className="font-semibold">Documentos PDF ({documentosList.length})</h4>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setIsUploadOpen(true)}
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Adicionar PDF
-        </Button>
+        <div className="flex items-center gap-2">
+          <h4 className="font-semibold">Documentos PDF ({documentosList.length})</h4>
+          {loading && (
+            <span className="text-xs text-muted-foreground">Carregando...</span>
+          )}
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              console.log('🔄 Botão atualizar clicado, buscando documentos...');
+              fetchDocumentos();
+            }}
+            disabled={loading}
+            title="Atualizar lista de documentos"
+          >
+            <Upload className="h-4 w-4 mr-2" />
+            {loading ? 'Carregando...' : 'Atualizar'}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsUploadOpen(true)}
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Adicionar PDF
+          </Button>
+        </div>
       </div>
 
-      {loading ? (
-        <div className="text-center py-4">
+      {error && (
+        <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-md">
+          <p className="text-sm text-destructive">{error}</p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={fetchDocumentos}
+            className="mt-2"
+          >
+            Tentar novamente
+          </Button>
+        </div>
+      )}
+
+      {loading && documentosList.length === 0 ? (
+        <div className="text-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
           <p className="text-sm text-muted-foreground">Carregando documentos...</p>
         </div>
       ) : documentosOrdenados.length > 0 ? (
         <div className="space-y-2">
           {documentosOrdenados.map((doc) => (
-            <div key={doc.id} className="flex items-center justify-between p-3 border rounded-lg">
-              <div className="flex items-center gap-3">
-                <FileText className={`h-5 w-5 ${doc.tipo === 'frequencia' ? 'text-blue-600' : 'text-green-600'}`} />
-                <div>
-                  <p className="text-sm font-medium">{doc.nome}</p>
+            <div key={doc.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors">
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <FileText className={`h-5 w-5 shrink-0 ${doc.tipo === 'frequencia' ? 'text-blue-600' : 'text-green-600'}`} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate" title={doc.nome}>{doc.nome}</p>
                   <p className="text-xs text-muted-foreground">
-                    {doc.tipo === 'frequencia' ? 'Frequência' : 'Documentação'} • 
-                    {new Date(doc.dataAnexacao).toLocaleDateString("pt-BR")} • 
-                    {doc.usuario}
+                    <span className="inline-flex items-center gap-1">
+                      {doc.tipo === 'frequencia' ? '📋 Frequência' : '📄 Documentação'}
+                    </span>
+                    {' • '}
+                    <span>{new Date(doc.dataAnexacao).toLocaleDateString("pt-BR", { 
+                      day: '2-digit', 
+                      month: '2-digit', 
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}</span>
+                    {' • '}
+                    <span>{doc.usuario}</span>
                   </p>
                 </div>
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 shrink-0">
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => window.open(doc.url, '_blank')}
+                  title="Visualizar PDF"
                 >
                   Visualizar
                 </Button>
@@ -294,6 +404,7 @@ export function PDFManager({ beneficiarioId, documentos, onUpdate }: PDFManagerP
                   size="sm"
                   onClick={() => handleDelete(doc.id, doc.url)}
                   className="text-red-600 hover:text-red-700"
+                  title="Excluir documento"
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
@@ -301,9 +412,13 @@ export function PDFManager({ beneficiarioId, documentos, onUpdate }: PDFManagerP
             </div>
           ))}
         </div>
-      ) : (
-        <p className="text-sm text-muted-foreground">Nenhum documento anexado</p>
-      )}
+      ) : !loading ? (
+        <div className="text-center py-8 border-2 border-dashed rounded-lg">
+          <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
+          <p className="text-sm text-muted-foreground font-medium">Nenhum documento anexado</p>
+          <p className="text-xs text-muted-foreground mt-1">Clique em "Adicionar PDF" para anexar um documento</p>
+        </div>
+      ) : null}
 
       {/* Dialog de Upload */}
       <Dialog open={isUploadOpen} onOpenChange={setIsUploadOpen}>
