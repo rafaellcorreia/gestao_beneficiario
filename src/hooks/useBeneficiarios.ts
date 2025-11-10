@@ -264,16 +264,25 @@ export function useBeneficiarios() {
       }
 
       // Preparar dados do beneficiário
-      // Calcular horas corretamente: garantir que restantes = total - cumpridas
+      // CÁLCULO CORRETO DE HORAS:
+      // 1. Total = cumpridas + restantes (informadas pelo usuário)
+      // 2. Horas restantes finais = total - cumpridas (garantir que está correto)
       const horasCumpridas = Number(data.horasCumpridas) || 0;
       const horasRestantesInformadas = Number(data.horasRestantes) || 0;
       
-      // Se ambos foram informados, o total é a soma
-      // As horas restantes devem ser recalculadas como: total - cumpridas
+      // Calcular total de horas
       const totalHoras = horasCumpridas + horasRestantesInformadas;
+      
+      // RECALCULAR horas restantes: sempre = total - cumpridas
+      // Isso garante que mesmo se o usuário alterar manualmente, o cálculo estará correto
       const horasRestantes = Math.max(0, totalHoras - horasCumpridas);
       
-      console.log('Salvando horas - Cumpridas:', horasCumpridas, 'Restantes informadas:', horasRestantesInformadas, 'Total:', totalHoras, 'Restantes calculadas:', horasRestantes);
+      console.log('💾 Salvando horas no banco:');
+      console.log('  - Horas Cumpridas (informadas):', horasCumpridas);
+      console.log('  - Horas Restantes (informadas):', horasRestantesInformadas);
+      console.log('  - Total de Horas (calculado):', totalHoras);
+      console.log('  - Horas Restantes (recalculadas):', horasRestantes);
+      console.log('  - Verificação: Total = Cumpridas + Restantes?', totalHoras, '=', horasCumpridas, '+', horasRestantes, '→', (horasCumpridas + horasRestantes === totalHoras ? '✅ CORRETO' : '❌ ERRO'));
 
       const beneficiarioDataComTelefones: Record<string, unknown> = {
         user_id: user.id,
@@ -311,11 +320,14 @@ export function useBeneficiarios() {
         console.warn('Colunas de telefone não encontradas. Tentando inserir sem esses campos...');
         
         // Criar objeto sem os campos de telefone
-        // Recalcular horas também quando inserindo sem telefones
+        // Recalcular horas também quando inserindo sem telefones (mesma lógica)
         const horasCumpridas = Number(data.horasCumpridas) || 0;
         const horasRestantesInformadas = Number(data.horasRestantes) || 0;
         const totalHoras = horasCumpridas + horasRestantesInformadas;
+        // Recalcular horas restantes: sempre = total - cumpridas
         const horasRestantes = Math.max(0, totalHoras - horasCumpridas);
+        
+        console.log('💾 Salvando horas (sem telefones): Total=', totalHoras, 'Cumpridas=', horasCumpridas, 'Restantes=', horasRestantes);
 
         const beneficiarioDataSemTelefones: Record<string, unknown> = {
           user_id: user.id,

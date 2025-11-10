@@ -74,32 +74,50 @@ export function EmployeeForm({ onSubmit, onCancel, initialData }: EmployeeFormPr
   const telSecundarioDDD = watch('telefoneSecundarioDDD' as any);
   const telSecundarioNumero = watch('telefoneSecundarioNumero' as any);
 
-  // Lógica simplificada de horas:
-  // - Usuário informa horas cumpridas e horas restantes
-  // - Total = cumpridas + restantes (calculado quando ambos são informados)
-  // - Quando horas cumpridas mudam, horas restantes = total - cumpridas (sempre)
+  // Lógica de cálculo de horas:
+  // 1. Usuário informa horas cumpridas e horas restantes (ex: 20 e 80)
+  // 2. Total = cumpridas + restantes (ex: 100) - calculado quando ambos são informados
+  // 3. Total fica FIXO
+  // 4. Quando horas cumpridas mudam, horas restantes = total - cumpridas (SEMPRE)
+  // 5. Exemplo: se total=100 e cumpridas mudam de 20 para 30, restantes = 100-30 = 70
+  
+  // Efeito para calcular total quando ambos os valores são informados pela primeira vez
   useEffect(() => {
     const cumpridas = Number(horasCumpridasWatch) || 0;
     const restantes = Number(horasRestantesWatch) || 0;
     
-    // Calcular total quando ambos os valores são informados pela primeira vez
+    // Se ainda não temos total definido E ambos os valores são informados, calcular total
     if (horasIniciais === 0) {
-      if (cumpridas > 0 && restantes > 0) {
+      // Permitir definir total apenas quando ambos são > 0 OU quando um deles muda e o outro já existe
+      if ((cumpridas > 0 && restantes > 0) || (cumpridas > 0 && restantes >= 0) || (cumpridas >= 0 && restantes > 0)) {
         const total = cumpridas + restantes;
-        setHorasIniciais(total);
-        console.log('Total de horas definido:', total, 'Cumpridas:', cumpridas, 'Restantes:', restantes);
+        if (total > 0) {
+          setHorasIniciais(total);
+          console.log('✅ Total de horas definido:', total, '| Cumpridas:', cumpridas, '| Restantes:', restantes);
+        }
       }
-    } else {
-      // Se já temos total definido, recalcular restantes baseado nas cumpridas
+    }
+  }, [horasCumpridasWatch, horasRestantesWatch, horasIniciais]);
+
+  // Efeito para recalcular horas restantes quando horas cumpridas mudam (APÓS total estar definido)
+  useEffect(() => {
+    if (horasIniciais > 0) {
+      const cumpridas = Number(horasCumpridasWatch) || 0;
+      const restantesAtuais = Number(horasRestantesWatch) || 0;
+      
+      // SEMPRE recalcular restantes = total - cumpridas
       const novasRestantes = Math.max(0, horasIniciais - cumpridas);
-      if (Math.abs(novasRestantes - restantes) > 0.01) {
-        console.log('Recalculando horas restantes:', novasRestantes, 'Total:', horasIniciais, 'Cumpridas:', cumpridas);
+      
+      // Atualizar apenas se o valor mudou significativamente
+      if (Math.abs(novasRestantes - restantesAtuais) > 0.01) {
+        console.log('🔄 Recalculando horas restantes:', novasRestantes, '| Total:', horasIniciais, '| Cumpridas:', cumpridas);
         setValue('horasRestantes', novasRestantes, { shouldValidate: true, shouldDirty: true });
       }
     }
-  }, [horasCumpridasWatch, horasIniciais, horasRestantesWatch, setValue]);
+  }, [horasCumpridasWatch, horasIniciais, setValue]); // Removido horasRestantesWatch para evitar loop
   
-  // Horas restantes só podem ser editadas manualmente se o total ainda não foi definido
+  // Horas restantes NUNCA podem ser editadas manualmente após o total ser definido
+  // O usuário só pode editar horas cumpridas, e as restantes são calculadas automaticamente
   const podeEditarRestantes = horasIniciais === 0;
 
   // Monta campos de telefone (DDD + número -> telefonePrincipal/telefoneSecundario)
@@ -347,6 +365,17 @@ export function EmployeeForm({ onSubmit, onCancel, initialData }: EmployeeFormPr
                 placeholder="0"
                 min="0"
                 step="0.5"
+                onChange={(e) => {
+                  const valor = parseFloat(e.target.value) || 0;
+                  setValue('horasCumpridas', valor, { shouldValidate: true, shouldDirty: true });
+                  
+                  // Se temos total definido, recalcular restantes imediatamente
+                  if (horasIniciais > 0) {
+                    const novasRestantes = Math.max(0, horasIniciais - valor);
+                    setValue('horasRestantes', novasRestantes, { shouldValidate: true, shouldDirty: true });
+                    console.log('⚡ Cálculo imediato: Total=', horasIniciais, '- Cumpridas=', valor, '= Restantes=', novasRestantes);
+                  }
+                }}
                 aria-invalid={!!errors.horasCumpridas}
                 aria-describedby={errors.horasCumpridas ? "horas-cumpridas-error" : undefined}
               />
@@ -357,14 +386,17 @@ export function EmployeeForm({ onSubmit, onCancel, initialData }: EmployeeFormPr
               )}
               <p className="text-xs text-muted-foreground mt-1">
                 {horasIniciais > 0 
-                  ? `Total: ${horasIniciais}h | Restantes serão calculadas automaticamente`
-                  : 'Informe as horas cumpridas e restantes'}
+                  ? `📊 Total: ${horasIniciais}h | As horas restantes serão calculadas automaticamente`
+                  : 'ℹ️ Informe as horas cumpridas e restantes para definir o total'}
               </p>
             </div>
 
             <div>
               <Label htmlFor="horasRestantes">
                 Horas Restantes <span className="text-destructive">*</span>
+                {horasIniciais > 0 && (
+                  <span className="text-xs text-muted-foreground ml-2">(calculado automaticamente)</span>
+                )}
               </Label>
               <Input
                 id="horasRestantes"
@@ -388,9 +420,14 @@ export function EmployeeForm({ onSubmit, onCancel, initialData }: EmployeeFormPr
               )}
               <p className="text-xs text-muted-foreground mt-1">
                 {horasIniciais > 0 
-                  ? `Calculado: ${horasIniciais}h - ${horasCumpridasWatch || 0}h = ${horasRestantesWatch || 0}h` 
-                  : 'Informe as horas restantes'}
+                  ? `🧮 Cálculo: ${horasIniciais}h (total) - ${horasCumpridasWatch || 0}h (cumpridas) = ${horasRestantesWatch || 0}h (restantes)` 
+                  : 'ℹ️ Informe as horas restantes inicialmente'}
               </p>
+              {horasIniciais > 0 && horasCumpridasWatch > 0 && (
+                <p className="text-xs text-green-600 dark:text-green-400 mt-1 font-medium">
+                  ✅ As horas restantes são recalculadas automaticamente quando você altera as horas cumpridas
+                </p>
+              )}
             </div>
           </div>
 
