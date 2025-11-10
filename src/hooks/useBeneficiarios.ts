@@ -21,20 +21,32 @@ export function useBeneficiarios() {
       const beneficiariosComDocumentos = await Promise.all(
         (data || []).map(async (b) => {
           // Buscar documentos PDF
-          const { data: documentosData } = await supabase
+          console.log(`Buscando documentos PDF para beneficiário ${b.id} (${b.nome})...`);
+          const { data: documentosData, error: documentosError } = await supabase
             .from("documentos_pdf")
             .select("*")
             .eq("beneficiario_id", b.id)
             .order("data_anexacao", { ascending: false });
 
-          const documentosPDF: DocumentoPDF[] = (documentosData || []).map((doc) => ({
-            id: doc.id,
-            nome: doc.nome,
-            url: doc.url,
-            tipo: doc.tipo,
-            dataAnexacao: new Date(doc.data_anexacao),
-            usuario: doc.usuario,
-          }));
+          if (documentosError) {
+            console.error(`Erro ao buscar documentos para beneficiário ${b.id}:`, documentosError);
+          } else {
+            console.log(`Documentos encontrados para beneficiário ${b.id}:`, documentosData?.length || 0);
+            if (documentosData && documentosData.length > 0) {
+              console.log('Dados dos documentos:', documentosData);
+            }
+          }
+
+          const documentosPDF: DocumentoPDF[] = (documentosData || []).map((doc) => {
+            return {
+              id: doc.id,
+              nome: doc.nome,
+              url: doc.url,
+              tipo: doc.tipo,
+              dataAnexacao: new Date(doc.data_anexacao),
+              usuario: doc.usuario,
+            };
+          });
 
           // Buscar observações
           const { data: observacoesData } = await supabase
@@ -252,10 +264,16 @@ export function useBeneficiarios() {
       }
 
       // Preparar dados do beneficiário
-      // Primeiro, tentamos com todos os campos incluindo telefones
-      // As horas já devem estar corretas vindas do formulário (já calculadas)
+      // Calcular horas corretamente: garantir que restantes = total - cumpridas
       const horasCumpridas = Number(data.horasCumpridas) || 0;
-      const horasRestantes = Number(data.horasRestantes) || 0;
+      const horasRestantesInformadas = Number(data.horasRestantes) || 0;
+      
+      // Se ambos foram informados, o total é a soma
+      // As horas restantes devem ser recalculadas como: total - cumpridas
+      const totalHoras = horasCumpridas + horasRestantesInformadas;
+      const horasRestantes = Math.max(0, totalHoras - horasCumpridas);
+      
+      console.log('Salvando horas - Cumpridas:', horasCumpridas, 'Restantes informadas:', horasRestantesInformadas, 'Total:', totalHoras, 'Restantes calculadas:', horasRestantes);
 
       const beneficiarioDataComTelefones: Record<string, unknown> = {
         user_id: user.id,
@@ -293,9 +311,11 @@ export function useBeneficiarios() {
         console.warn('Colunas de telefone não encontradas. Tentando inserir sem esses campos...');
         
         // Criar objeto sem os campos de telefone
-        // As horas já devem estar corretas vindas do formulário
+        // Recalcular horas também quando inserindo sem telefones
         const horasCumpridas = Number(data.horasCumpridas) || 0;
-        const horasRestantes = Number(data.horasRestantes) || 0;
+        const horasRestantesInformadas = Number(data.horasRestantes) || 0;
+        const totalHoras = horasCumpridas + horasRestantesInformadas;
+        const horasRestantes = Math.max(0, totalHoras - horasCumpridas);
 
         const beneficiarioDataSemTelefones: Record<string, unknown> = {
           user_id: user.id,
@@ -441,8 +461,18 @@ export function useBeneficiarios() {
 
   const deleteBeneficiario = async (id: string) => {
     try {
-      console.log('Iniciando exclusão do beneficiário:', id);
+      console.log('=== INICIANDO EXCLUSÃO DE BENEFICIÁRIO ===');
+      console.log('ID do beneficiário:', id);
       
+      // Verificar se o usuário está autenticado
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) {
+        console.error('Erro de autenticação:', authError);
+        throw new Error('Usuário não autenticado');
+      }
+      console.log('Usuário autenticado:', user.email);
+      
+      // Tentar excluir o beneficiário
       const { error, data } = await supabase
         .from("beneficiarios")
         .delete()
@@ -450,26 +480,59 @@ export function useBeneficiarios() {
         .select();
 
       if (error) {
-        console.error('Erro ao excluir do banco:', error);
+        console.error('=== ERRO AO EXCLUIR DO BANCO ===');
+        console.error('Código do erro:', error.code);
+        console.error('Mensagem do erro:', error.message);
+        console.error('Detalhes do erro:', error.details);
+        console.error('Hint do erro:', error.hint);
+        
+        // Verificar se é erro de RLS (Row Level Security)
+        if (error.code === '42501' || error.message?.includes('row-level security')) {
+          throw new Error('Você não tem permissão para excluir este beneficiário. Verifique as políticas de segurança no Supabase.');
+        }
+        
         throw error;
       }
 
-      console.log('Beneficiário excluído do banco:', data);
+      console.log('=== BENEFICIÁRIO EXCLUÍDO COM SUCESSO ===');
+      console.log('Dados excluídos:', data);
       
       // Remover da lista local imediatamente
-      setBeneficiarios(prev => prev.filter(b => b.id !== id));
+      setBeneficiarios(prev => {
+        const novaLista = prev.filter(b => b.id !== id);
+        console.log('Lista local atualizada. Beneficiários restantes:', novaLista.length);
+        return novaLista;
+      });
       
       // Atualizar lista completa do servidor
+      console.log('Atualizando lista do servidor...');
       await fetchBeneficiarios();
+      console.log('Lista atualizada com sucesso');
       
       toast.success("Beneficiário excluído com sucesso!");
       return { success: true };
     } catch (error: unknown) {
-      console.error("Erro ao excluir beneficiário:", error);
-      const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
+      console.error("=== ERRO COMPLETO AO EXCLUIR BENEFICIÁRIO ===");
+      console.error("Erro:", error);
+      
+      let errorMessage = "Erro desconhecido ao excluir";
+      
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (error && typeof error === 'object' && 'message' in error) {
+        errorMessage = String(error.message);
+      }
+      
+      console.error("Mensagem de erro final:", errorMessage);
       toast.error("Erro ao excluir beneficiário: " + errorMessage);
+      
       // Tentar atualizar lista mesmo em caso de erro para manter sincronizado
-      await fetchBeneficiarios();
+      try {
+        await fetchBeneficiarios();
+      } catch (fetchError) {
+        console.error("Erro ao atualizar lista após falha na exclusão:", fetchError);
+      }
+      
       return { success: false, error: errorMessage };
     }
   };

@@ -31,12 +31,16 @@ export function PDFManager({ beneficiarioId, documentos, onUpdate }: PDFManagerP
   // Função para buscar documentos do banco
   const fetchDocumentos = async () => {
     if (!beneficiarioId) {
+      console.log('fetchDocumentos: beneficiarioId não fornecido');
       setDocumentosList([]);
       return;
     }
     
     try {
       setLoading(true);
+      console.log('=== BUSCANDO DOCUMENTOS PDF ===');
+      console.log('Beneficiário ID:', beneficiarioId);
+      
       const { data: documentosData, error } = await supabase
         .from('documentos_pdf')
         .select('*')
@@ -44,23 +48,34 @@ export function PDFManager({ beneficiarioId, documentos, onUpdate }: PDFManagerP
         .order('data_anexacao', { ascending: false });
 
       if (error) {
-        console.error('Erro ao buscar documentos:', error);
+        console.error('=== ERRO AO BUSCAR DOCUMENTOS ===');
+        console.error('Código do erro:', error.code);
+        console.error('Mensagem do erro:', error.message);
+        console.error('Detalhes do erro:', error.details);
         setDocumentosList([]);
         return;
       }
 
-      const documentosPDF: DocumentoPDF[] = (documentosData || []).map((doc) => ({
-        id: doc.id,
-        nome: doc.nome,
-        url: doc.url,
-        tipo: doc.tipo,
-        dataAnexacao: new Date(doc.data_anexacao),
-        usuario: doc.usuario,
-      }));
+      console.log('Documentos encontrados:', documentosData?.length || 0);
+      console.log('Dados dos documentos:', documentosData);
 
+      const documentosPDF: DocumentoPDF[] = (documentosData || []).map((doc) => {
+        console.log('Mapeando documento:', doc);
+        return {
+          id: doc.id,
+          nome: doc.nome,
+          url: doc.url,
+          tipo: doc.tipo,
+          dataAnexacao: new Date(doc.data_anexacao),
+          usuario: doc.usuario,
+        };
+      });
+
+      console.log('Documentos mapeados:', documentosPDF.length);
       setDocumentosList(documentosPDF);
     } catch (error) {
-      console.error('Erro ao buscar documentos:', error);
+      console.error('=== ERRO COMPLETO AO BUSCAR DOCUMENTOS ===');
+      console.error('Erro:', error);
       setDocumentosList([]);
     } finally {
       setLoading(false);
@@ -87,63 +102,101 @@ export function PDFManager({ beneficiarioId, documentos, onUpdate }: PDFManagerP
 
     try {
       setIsUploading(true);
-      const { data: { user } } = await supabase.auth.getUser();
+      console.log('=== INICIANDO UPLOAD DE PDF ===');
+      console.log('Beneficiário ID:', beneficiarioId);
+      console.log('Tipo:', uploadType);
+      console.log('Arquivo:', uploadingFile.name, 'Tamanho:', uploadingFile.size);
       
-      if (!user) {
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      
+      if (authError || !user) {
+        console.error('Erro de autenticação:', authError);
         toast.error("Usuário não autenticado");
         return;
       }
 
+      console.log('Usuário autenticado:', user.email);
+
       const fileExt = uploadingFile.name.split('.').pop();
       const fileName = `${user.id}-${uploadType}-${Date.now()}.${fileExt}`;
+      console.log('Nome do arquivo no storage:', fileName);
       
       // Upload do arquivo
-      const { error: uploadError } = await supabase.storage
+      console.log('Fazendo upload para o storage...');
+      const { error: uploadError, data: uploadData } = await supabase.storage
         .from('beneficiarios-documentos')
         .upload(fileName, uploadingFile);
       
       if (uploadError) {
+        console.error('Erro no upload do storage:', uploadError);
         throw uploadError;
       }
+
+      console.log('Upload do storage concluído:', uploadData);
 
       const { data: { publicUrl } } = supabase.storage
         .from('beneficiarios-documentos')
         .getPublicUrl(fileName);
 
+      console.log('URL pública gerada:', publicUrl);
+
       // Salvar referência no banco
-      const { error: dbError } = await supabase
+      console.log('Salvando referência no banco de dados...');
+      const documentoData = {
+        beneficiario_id: beneficiarioId,
+        nome: uploadingFile.name,
+        url: publicUrl,
+        tipo: uploadType,
+        usuario: user.email || 'Usuário',
+        data_anexacao: new Date().toISOString(),
+      };
+      
+      console.log('Dados do documento a inserir:', documentoData);
+      
+      const { data: insertedData, error: dbError } = await supabase
         .from('documentos_pdf')
-        .insert({
-          beneficiario_id: beneficiarioId,
-          nome: uploadingFile.name,
-          url: publicUrl,
-          tipo: uploadType,
-          usuario: user.email || 'Usuário',
-        });
+        .insert(documentoData)
+        .select()
+        .single();
 
       if (dbError) {
+        console.error('=== ERRO AO SALVAR NO BANCO ===');
+        console.error('Código do erro:', dbError.code);
+        console.error('Mensagem do erro:', dbError.message);
+        console.error('Detalhes do erro:', dbError.details);
+        console.error('Hint do erro:', dbError.hint);
         throw dbError;
       }
 
-      // Atualizar atalho no registro do beneficiário
+      console.log('Documento salvo no banco com sucesso:', insertedData);
+
+      // Atualizar atalho no registro do beneficiário (opcional)
       const colunaAtalho = uploadType === 'frequencia' ? 'frequencia_pdf_url' : 'documentacao_pdf_url';
       const { error: updErr } = await supabase
         .from('beneficiarios')
         .update({ [colunaAtalho]: publicUrl })
         .eq('id', beneficiarioId);
       if (updErr) {
-        console.warn('Falha ao atualizar atalho de PDF no beneficiário:', updErr);
+        console.warn('Aviso: Falha ao atualizar atalho de PDF no beneficiário (não crítico):', updErr);
+      } else {
+        console.log('Atalho de PDF atualizado no beneficiário');
       }
 
       toast.success("PDF enviado com sucesso!");
       setIsUploadOpen(false);
       setUploadingFile(null);
+      
       // Atualizar lista de documentos
+      console.log('Atualizando lista de documentos...');
       await fetchDocumentos();
+      console.log('Lista de documentos atualizada');
+      
       // Chamar callback para atualizar dados do beneficiário
       onUpdate();
+      console.log('=== UPLOAD CONCLUÍDO COM SUCESSO ===');
     } catch (error: unknown) {
-      console.error("Erro ao fazer upload:", error);
+      console.error("=== ERRO COMPLETO AO FAZER UPLOAD ===");
+      console.error("Erro:", error);
       const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
       toast.error("Erro ao fazer upload: " + errorMessage);
     } finally {

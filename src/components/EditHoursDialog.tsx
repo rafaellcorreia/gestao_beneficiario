@@ -59,20 +59,40 @@ export function EditHoursDialog({ open, onOpenChange, beneficiario, onUpdate }: 
   const handleSave = async () => {
     if (!beneficiario) return;
 
+    // Validar que horas cumpridas não excedam o total
+    if (horasIniciais > 0 && horasCumpridas > horasIniciais) {
+      toast.error(`Horas cumpridas (${horasCumpridas}h) não podem ser maiores que o total (${horasIniciais}h)`);
+      return;
+    }
+
+    // Garantir que horas restantes estão corretas
+    const horasRestantesCalculadas = horasIniciais > 0 
+      ? Math.max(0, horasIniciais - horasCumpridas)
+      : horasRestantes;
+
+    console.log('Salvando horas atualizadas:');
+    console.log('Total:', horasIniciais);
+    console.log('Cumpridas:', horasCumpridas);
+    console.log('Restantes calculadas:', horasRestantesCalculadas);
+
     setLoading(true);
     try {
       const { error } = await supabase
         .from("beneficiarios")
         .update({
           horas_cumpridas: horasCumpridas,
-          horas_restantes: horasRestantes,
+          horas_restantes: horasRestantesCalculadas,
           atualizado_em: new Date().toISOString(),
           atualizado_por: "Sistema"
         })
         .eq("id", beneficiario.id);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Erro ao atualizar horas:', error);
+        throw error;
+      }
 
+      console.log('Horas atualizadas com sucesso no banco');
       toast.success("Horas atualizadas com sucesso!");
       onUpdate();
       onOpenChange(false);
