@@ -134,7 +134,14 @@ export function useBeneficiarios() {
       }
 
       // Upload da foto se existir
-      let fotoUrl = data.fotoPreview;
+      let fotoUrl = data.fotoPreview || '';
+      
+      // Validar se há uma foto válida
+      if (!fotoUrl && (!data.foto || !(data.foto instanceof File))) {
+        toast.error("Por favor, capture ou faça upload de uma foto");
+        return { success: false, error: "Foto é obrigatória" };
+      }
+
       if (data.foto && data.foto instanceof File) {
         try {
           const fileExt = data.foto.name.split('.').pop();
@@ -149,20 +156,27 @@ export function useBeneficiarios() {
             console.warn('Erro no upload da foto, usando preview:', uploadError);
             toast.warning('Erro no upload da foto, usando preview local');
             // Usar a URL de preview como fallback
-            fotoUrl = data.fotoPreview;
+            fotoUrl = data.fotoPreview || '';
           } else {
             const { data: { publicUrl } } = supabase.storage
               .from('beneficiarios-fotos')
               .getPublicUrl(fileName);
             
-            fotoUrl = publicUrl;
+            fotoUrl = publicUrl || data.fotoPreview || '';
             console.log('Foto enviada com sucesso:', fotoUrl);
           }
         } catch (error) {
           console.warn('Erro no upload da foto, usando preview:', error);
           toast.warning('Erro no upload da foto, usando preview local');
-          fotoUrl = data.fotoPreview;
+          fotoUrl = data.fotoPreview || '';
         }
+      }
+
+      // Garantir que fotoUrl nunca esteja vazio
+      if (!fotoUrl || fotoUrl.trim() === '') {
+        // Usar uma imagem placeholder se não houver foto
+        fotoUrl = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(data.nome)}`;
+        console.warn('Usando imagem placeholder para foto');
       }
 
       // Upload dos PDFs se existirem
@@ -226,26 +240,50 @@ export function useBeneficiarios() {
       const isoDate = new Date(data.dataRecebimento);
       const dataSql = isNaN(isoDate.getTime()) ? null : isoDate.toISOString().slice(0, 10);
 
-      const { data: newBenef, error } = await supabase.from("beneficiarios").insert({
+      // Validações finais antes de inserir
+      if (!dataSql) {
+        toast.error("Data de recebimento inválida");
+        return { success: false, error: "Data de recebimento inválida" };
+      }
+
+      if (!fotoUrl || fotoUrl.trim() === '') {
+        toast.error("Foto é obrigatória");
+        return { success: false, error: "Foto é obrigatória" };
+      }
+
+      const beneficiarioData = {
         user_id: user.id,
-        nome: data.nome,
+        nome: data.nome.trim(),
         foto_url: fotoUrl,
-        numero_processo: data.numeroProcesso,
+        numero_processo: data.numeroProcesso.trim(),
         data_recebimento: dataSql,
         status_vida: data.statusVida,
-        local_lotacao: data.localLotacao,
-        telefone_principal: data.telefonePrincipal || null,
-        telefone_secundario: data.telefoneSecundario || null,
-        horas_cumpridas: data.horasCumpridas,
-        horas_restantes: data.horasRestantes,
-        frequencia_pdf_url: frequenciaPdfUrl,
-        documentacao_pdf_url: documentacaoPdfUrl,
+        local_lotacao: (data.localLotacao || 'Não informado').trim(),
+        telefone_principal: data.telefonePrincipal?.trim() || null,
+        telefone_secundario: data.telefoneSecundario?.trim() || null,
+        horas_cumpridas: Number(data.horasCumpridas) || 0,
+        horas_restantes: Number(data.horasRestantes) || 0,
+        frequencia_pdf_url: frequenciaPdfUrl || null,
+        documentacao_pdf_url: documentacaoPdfUrl || null,
         criado_por: "Sistema",
         atualizado_por: "Sistema",
-      }).select("id").single();
+      };
+
+      console.log('Dados do beneficiário a serem inseridos:', beneficiarioData);
+      console.log('User ID:', user.id);
+      console.log('User Email:', user.email);
+
+      const { data: newBenef, error } = await supabase.from("beneficiarios").insert(beneficiarioData).select("id").single();
 
       if (error) {
-        console.error('Erro ao inserir beneficiário:', error);
+        console.error('Erro ao inserir beneficiário - Detalhes completos:', {
+          error,
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          beneficiarioData
+        });
         throw error;
       }
 
@@ -273,21 +311,78 @@ export function useBeneficiarios() {
       
       // Tratamento específico de erros
       let errorMessage = "Erro desconhecido ao salvar";
+      let errorDetails = "";
       
-      if (error instanceof Error) {
-        const message = error.message;
-        if (message.includes("bucket")) {
-          errorMessage = "Erro de configuração de armazenamento. Verifique as configurações.";
-        } else if (message.includes("policy")) {
-          errorMessage = "Erro de permissão. Verifique as configurações de acesso.";
-        } else if (message.includes("relation")) {
-          errorMessage = "Erro de banco de dados. Tabela não encontrada.";
-        } else {
-          errorMessage = message;
+      // Verificar se é um erro do Supabase (tem propriedades code, message, details)
+      // O erro do Supabase pode ser um objeto PostgrestError ou um Error padrão
+      let supabaseError: { code?: string; message?: string; details?: string; hint?: string } | null = null;
+      
+      if (error && typeof error === 'object') {
+        // Tentar acessar as propriedades do erro do Supabase
+        supabaseError = error as { code?: string; message?: string; details?: string; hint?: string };
+        
+        // Log completo do erro para debug
+        console.error("Erro capturado (objeto):", {
+          error,
+          type: typeof error,
+          constructor: error?.constructor?.name,
+          keys: Object.keys(error || {}),
+          code: supabaseError?.code,
+          message: supabaseError?.message,
+          details: supabaseError?.details,
+          hint: supabaseError?.hint,
+          stringified: JSON.stringify(error, null, 2)
+        });
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
+        console.error("Erro padrão (Error instance):", error);
+        console.error("Stack trace:", error.stack);
+      } else {
+        console.error("Erro desconhecido:", error);
+        console.error("Tipo do erro:", typeof error);
+        console.error("Stringified:", JSON.stringify(error, null, 2));
+      }
+
+      // Processar erro do Supabase se disponível
+      if (supabaseError) {
+        if (supabaseError.message) {
+          errorMessage = supabaseError.message;
+          errorDetails = supabaseError.details || "";
+          
+          // Mensagens mais amigáveis para erros comuns do PostgreSQL/Supabase
+          if (supabaseError.code === '23505') {
+            errorMessage = "Já existe um beneficiário com este número de processo ou nome.";
+          } else if (supabaseError.code === '23503') {
+            errorMessage = "Erro de referência: Verifique se o usuário está corretamente autenticado.";
+          } else if (supabaseError.code === '23502') {
+            errorMessage = "Campo obrigatório faltando: " + (supabaseError.details || "Verifique todos os campos obrigatórios.");
+          } else if (supabaseError.code === '42501') {
+            errorMessage = "Erro de permissão: Você não tem permissão para realizar esta ação. Verifique as políticas RLS.";
+          } else if (supabaseError.code === 'PGRST116') {
+            errorMessage = "Nenhum resultado retornado. Verifique se o registro foi inserido corretamente.";
+          } else if (supabaseError.message) {
+            const msg = supabaseError.message.toLowerCase();
+            if (msg.includes("bucket")) {
+              errorMessage = "Erro de configuração de armazenamento. Verifique as configurações.";
+            } else if (msg.includes("policy") || msg.includes("permission")) {
+              errorMessage = "Erro de permissão. Verifique as configurações de acesso e políticas RLS.";
+            } else if (msg.includes("relation") || msg.includes("does not exist")) {
+              errorMessage = "Erro de banco de dados. Tabela não encontrada. Verifique as migrações do banco.";
+            } else if (msg.includes("violates not-null constraint")) {
+              errorMessage = "Campo obrigatório não preenchido: " + (supabaseError.details || "Verifique todos os campos.");
+            } else if (msg.includes("violates check constraint")) {
+              errorMessage = "Valor inválido: " + (supabaseError.details || "Verifique os dados informados.");
+            } else if (msg.includes("new row violates row-level security policy")) {
+              errorMessage = "Erro de segurança: Você não tem permissão para criar este registro. Verifique as políticas RLS.";
+            }
+          }
         }
       }
       
-      toast.error("Erro ao salvar: " + errorMessage);
+      // Mostrar mensagem de erro completa no toast
+      const finalMessage = errorDetails ? `${errorMessage} (${errorDetails})` : errorMessage;
+      toast.error("Erro ao salvar: " + finalMessage);
+      
       return { success: false, error: errorMessage };
     }
   };
