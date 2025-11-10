@@ -251,7 +251,9 @@ export function useBeneficiarios() {
         return { success: false, error: "Foto é obrigatória" };
       }
 
-      const beneficiarioData = {
+      // Preparar dados do beneficiário
+      // Primeiro, tentamos com todos os campos incluindo telefones
+      const beneficiarioDataComTelefones: Record<string, unknown> = {
         user_id: user.id,
         nome: data.nome.trim(),
         foto_url: fotoUrl,
@@ -259,8 +261,6 @@ export function useBeneficiarios() {
         data_recebimento: dataSql,
         status_vida: data.statusVida,
         local_lotacao: (data.localLotacao || 'Não informado').trim(),
-        telefone_principal: data.telefonePrincipal?.trim() || null,
-        telefone_secundario: data.telefoneSecundario?.trim() || null,
         horas_cumpridas: Number(data.horasCumpridas) || 0,
         horas_restantes: Number(data.horasRestantes) || 0,
         frequencia_pdf_url: frequenciaPdfUrl || null,
@@ -269,11 +269,52 @@ export function useBeneficiarios() {
         atualizado_por: "Sistema",
       };
 
-      console.log('Dados do beneficiário a serem inseridos:', beneficiarioData);
+      // Adicionar telefones se tiverem valor
+      if (data.telefonePrincipal?.trim()) {
+        beneficiarioDataComTelefones.telefone_principal = data.telefonePrincipal.trim();
+      }
+      if (data.telefoneSecundario?.trim()) {
+        beneficiarioDataComTelefones.telefone_secundario = data.telefoneSecundario.trim();
+      }
+
+      console.log('Dados do beneficiário a serem inseridos:', beneficiarioDataComTelefones);
       console.log('User ID:', user.id);
       console.log('User Email:', user.email);
 
-      const { data: newBenef, error } = await supabase.from("beneficiarios").insert(beneficiarioData).select("id").single();
+      // Tentar inserir com telefones primeiro
+      let { data: newBenef, error } = await supabase.from("beneficiarios").insert(beneficiarioDataComTelefones).select("id").single();
+
+      // Se o erro for relacionado a colunas de telefone não encontradas, tentar sem elas
+      if (error && error.message && error.message.includes("could not find") && error.message.includes("telefone")) {
+        console.warn('Colunas de telefone não encontradas. Tentando inserir sem esses campos...');
+        
+        // Criar objeto sem os campos de telefone
+        const beneficiarioDataSemTelefones: Record<string, unknown> = {
+          user_id: user.id,
+          nome: data.nome.trim(),
+          foto_url: fotoUrl,
+          numero_processo: data.numeroProcesso.trim(),
+          data_recebimento: dataSql,
+          status_vida: data.statusVida,
+          local_lotacao: (data.localLotacao || 'Não informado').trim(),
+          horas_cumpridas: Number(data.horasCumpridas) || 0,
+          horas_restantes: Number(data.horasRestantes) || 0,
+          frequencia_pdf_url: frequenciaPdfUrl || null,
+          documentacao_pdf_url: documentacaoPdfUrl || null,
+          criado_por: "Sistema",
+          atualizado_por: "Sistema",
+        };
+
+        // Tentar inserir sem os campos de telefone
+        const result = await supabase.from("beneficiarios").insert(beneficiarioDataSemTelefones).select("id").single();
+        newBenef = result.data;
+        error = result.error;
+
+        if (!error) {
+          console.log('Beneficiário inserido com sucesso (sem campos de telefone). Aplique a migração para adicionar essas colunas.');
+          toast.warning("Beneficiário cadastrado, mas campos de telefone não foram salvos. Execute a migração no Supabase para habilitar esses campos.");
+        }
+      }
 
       if (error) {
         console.error('Erro ao inserir beneficiário - Detalhes completos:', {
@@ -282,7 +323,7 @@ export function useBeneficiarios() {
           message: error.message,
           details: error.details,
           hint: error.hint,
-          beneficiarioData
+          beneficiarioData: beneficiarioDataComTelefones
         });
         throw error;
       }
@@ -374,6 +415,9 @@ export function useBeneficiarios() {
               errorMessage = "Valor inválido: " + (supabaseError.details || "Verifique os dados informados.");
             } else if (msg.includes("new row violates row-level security policy")) {
               errorMessage = "Erro de segurança: Você não tem permissão para criar este registro. Verifique as políticas RLS.";
+            } else if (msg.includes("could not find") && msg.includes("column") && msg.includes("schema cache")) {
+              errorMessage = "Erro de estrutura do banco: A coluna não existe na tabela. Execute a migração para adicionar as colunas de telefone.";
+              errorDetails = "Execute a migração 20251029120001_fix_add_telefones_columns.sql no Supabase";
             }
           }
         }
