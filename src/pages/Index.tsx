@@ -69,8 +69,14 @@ const Index = () => {
     
     const result = await deleteBeneficiario(beneficiarioToDelete.id);
     if (result.success) {
+      // Se o beneficiário excluído é o mesmo que está selecionado, limpar seleção
+      if (selectedEmployee?.id === beneficiarioToDelete.id) {
+        setSelectedEmployee(null);
+      }
       setIsDeleteDialogOpen(false);
       setBeneficiarioToDelete(null);
+      // Forçar atualização da lista
+      await fetchBeneficiarios();
     }
   };
 
@@ -319,78 +325,96 @@ const Index = () => {
 
       {/* Dialog Detalhes */}
       <Dialog open={!!selectedEmployee} onOpenChange={() => setSelectedEmployee(null)}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Detalhes do Beneficiário</DialogTitle>
           </DialogHeader>
-          {selectedEmployee && (
-            <div className="space-y-4">
-              <div className="flex items-start gap-4">
-                <img
-                  src={selectedEmployee.fotoUrl}
-                  alt={selectedEmployee.nome}
-                  className="w-24 h-24 rounded-lg object-cover"
-                  onError={(e) => {
-                    const target = e.target as HTMLImageElement;
-                    target.src = 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + encodeURIComponent(selectedEmployee.nome);
-                  }}
-                />
-                <div className="flex-1">
-                  <h3 className="text-xl font-bold text-foreground">{selectedEmployee.nome}</h3>
-                  <p className="text-muted-foreground">
-                    Processo: {selectedEmployee.numeroProcesso}
-                  </p>
-                  <p className="text-muted-foreground">
-                    Local de Lotação: {selectedEmployee.localLotacao}
-                  </p>
-                  <p className="text-muted-foreground">
-                    Data de Recebimento: {new Date(selectedEmployee.dataRecebimento).toLocaleDateString("pt-BR")}
-                  </p>
-                  <div className="flex gap-2 mt-2">
-                    <StatusBadge status={selectedEmployee.statusVida} />
-                    <HorasBadge horas={selectedEmployee.horasRestantes} />
-                  </div>
-                  <div className="mt-2 space-y-1">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm text-muted-foreground">
-                        Horas Cumpridas: <span className="font-medium text-foreground">{selectedEmployee.horasCumpridas}h</span>
-                      </p>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setIsEditHoursOpen(true)}
-                        className="h-6 px-2 text-xs"
-                      >
-                        <Edit3 className="h-3 w-3 mr-1" />
-                        Editar
-                      </Button>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      Horas Restantes: <span className="font-medium text-foreground">{selectedEmployee.horasRestantes}h</span>
+          {selectedEmployee && (() => {
+            // Buscar dados atualizados do beneficiário quando o diálogo é aberto
+            const beneficiarioAtualizado = beneficiarios.find(b => b.id === selectedEmployee.id) || selectedEmployee;
+            return (
+              <div className="space-y-4">
+                <div className="flex items-start gap-4">
+                  <img
+                    src={beneficiarioAtualizado.fotoUrl}
+                    alt={beneficiarioAtualizado.nome}
+                    className="w-24 h-24 rounded-lg object-cover"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.src = 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + encodeURIComponent(beneficiarioAtualizado.nome);
+                    }}
+                  />
+                  <div className="flex-1">
+                    <h3 className="text-xl font-bold text-foreground">{beneficiarioAtualizado.nome}</h3>
+                    <p className="text-muted-foreground">
+                      Processo: {beneficiarioAtualizado.numeroProcesso}
                     </p>
+                    <p className="text-muted-foreground">
+                      Local de Lotação: {beneficiarioAtualizado.localLotacao}
+                    </p>
+                    <p className="text-muted-foreground">
+                      Data de Recebimento: {new Date(beneficiarioAtualizado.dataRecebimento).toLocaleDateString("pt-BR")}
+                    </p>
+                    <div className="flex gap-2 mt-2">
+                      <StatusBadge status={beneficiarioAtualizado.statusVida} />
+                      <HorasBadge horas={beneficiarioAtualizado.horasRestantes} />
+                    </div>
+                    <div className="mt-2 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm text-muted-foreground">
+                          Horas Cumpridas: <span className="font-medium text-foreground">{beneficiarioAtualizado.horasCumpridas}h</span>
+                        </p>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setIsEditHoursOpen(true)}
+                          className="h-6 px-2 text-xs"
+                        >
+                          <Edit3 className="h-3 w-3 mr-1" />
+                          Editar
+                        </Button>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        Horas Restantes: <span className="font-medium text-foreground">{beneficiarioAtualizado.horasRestantes}h</span>
+                      </p>
+                    </div>
                   </div>
                 </div>
+                
+                {/* Documentos PDF */}
+                <div className="pt-4 border-t">
+                  <PDFManager
+                    beneficiarioId={beneficiarioAtualizado.id}
+                    documentos={beneficiarioAtualizado.documentosPDF}
+                    onUpdate={async () => {
+                      await fetchBeneficiarios();
+                      // Atualizar selectedEmployee com dados atualizados
+                      const updated = beneficiarios.find(b => b.id === beneficiarioAtualizado.id);
+                      if (updated) {
+                        setSelectedEmployee(updated);
+                      }
+                    }}
+                  />
+                </div>
+                
+                {/* Observações */}
+                <div className="pt-4 border-t">
+                  <ObservationsManager
+                    beneficiarioId={beneficiarioAtualizado.id}
+                    observacoes={beneficiarioAtualizado.observacoes}
+                    onUpdate={async () => {
+                      await fetchBeneficiarios();
+                      // Atualizar selectedEmployee com dados atualizados
+                      const updated = beneficiarios.find(b => b.id === beneficiarioAtualizado.id);
+                      if (updated) {
+                        setSelectedEmployee(updated);
+                      }
+                    }}
+                  />
+                </div>
               </div>
-              
-              {/* Documentos PDF */}
-              <div className="pt-4 border-t">
-                <PDFManager
-                  beneficiarioId={selectedEmployee.id}
-                  documentos={selectedEmployee.documentosPDF}
-                  onUpdate={fetchBeneficiarios}
-                />
-              </div>
-              
-              {/* Observações */}
-              <div className="pt-4 border-t">
-                <ObservationsManager
-                  beneficiarioId={selectedEmployee.id}
-                  observacoes={selectedEmployee.observacoes}
-                  onUpdate={fetchBeneficiarios}
-                />
-              </div>
-            </div>
-          )}
+            );
+          })()}
         </DialogContent>
       </Dialog>
 
@@ -406,7 +430,16 @@ const Index = () => {
         open={isEditHoursOpen}
         onOpenChange={setIsEditHoursOpen}
         beneficiario={selectedEmployee}
-        onUpdate={fetchBeneficiarios}
+        onUpdate={async () => {
+          await fetchBeneficiarios();
+          // Atualizar selectedEmployee com dados atualizados
+          if (selectedEmployee) {
+            const updated = beneficiarios.find(b => b.id === selectedEmployee.id);
+            if (updated) {
+              setSelectedEmployee(updated);
+            }
+          }
+        }}
       />
 
       {/* Dialog de Confirmação de Exclusão */}

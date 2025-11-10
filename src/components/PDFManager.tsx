@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,6 +25,53 @@ export function PDFManager({ beneficiarioId, documentos, onUpdate }: PDFManagerP
   const [uploadingFile, setUploadingFile] = useState<File | null>(null);
   const [uploadType, setUploadType] = useState<'frequencia' | 'documentacao'>('frequencia');
   const [isUploading, setIsUploading] = useState(false);
+  const [documentosList, setDocumentosList] = useState<DocumentoPDF[]>(documentos);
+  const [loading, setLoading] = useState(false);
+
+  // Função para buscar documentos do banco
+  const fetchDocumentos = async () => {
+    if (!beneficiarioId) {
+      setDocumentosList([]);
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      const { data: documentosData, error } = await supabase
+        .from('documentos_pdf')
+        .select('*')
+        .eq('beneficiario_id', beneficiarioId)
+        .order('data_anexacao', { ascending: false });
+
+      if (error) {
+        console.error('Erro ao buscar documentos:', error);
+        setDocumentosList([]);
+        return;
+      }
+
+      const documentosPDF: DocumentoPDF[] = (documentosData || []).map((doc) => ({
+        id: doc.id,
+        nome: doc.nome,
+        url: doc.url,
+        tipo: doc.tipo,
+        dataAnexacao: new Date(doc.data_anexacao),
+        usuario: doc.usuario,
+      }));
+
+      setDocumentosList(documentosPDF);
+    } catch (error) {
+      console.error('Erro ao buscar documentos:', error);
+      setDocumentosList([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Buscar documentos quando o componente é montado ou beneficiarioId muda
+  useEffect(() => {
+    fetchDocumentos();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [beneficiarioId]);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -91,6 +138,9 @@ export function PDFManager({ beneficiarioId, documentos, onUpdate }: PDFManagerP
       toast.success("PDF enviado com sucesso!");
       setIsUploadOpen(false);
       setUploadingFile(null);
+      // Atualizar lista de documentos
+      await fetchDocumentos();
+      // Chamar callback para atualizar dados do beneficiário
       onUpdate();
     } catch (error: unknown) {
       console.error("Erro ao fazer upload:", error);
@@ -129,6 +179,9 @@ export function PDFManager({ beneficiarioId, documentos, onUpdate }: PDFManagerP
       }
 
       toast.success("Documento excluído com sucesso!");
+      // Atualizar lista de documentos
+      await fetchDocumentos();
+      // Chamar callback para atualizar dados do beneficiário
       onUpdate();
     } catch (error: unknown) {
       console.error("Erro ao excluir documento:", error);
@@ -138,14 +191,14 @@ export function PDFManager({ beneficiarioId, documentos, onUpdate }: PDFManagerP
   };
 
   // Ordenar documentos por data de anexação (mais recente primeiro)
-  const documentosOrdenados = [...documentos].sort((a, b) => 
+  const documentosOrdenados = [...documentosList].sort((a, b) => 
     new Date(b.dataAnexacao).getTime() - new Date(a.dataAnexacao).getTime()
   );
 
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <h4 className="font-semibold">Documentos PDF ({documentos.length})</h4>
+        <h4 className="font-semibold">Documentos PDF ({documentosList.length})</h4>
         <Button
           variant="outline"
           size="sm"
@@ -156,7 +209,11 @@ export function PDFManager({ beneficiarioId, documentos, onUpdate }: PDFManagerP
         </Button>
       </div>
 
-      {documentosOrdenados.length > 0 ? (
+      {loading ? (
+        <div className="text-center py-4">
+          <p className="text-sm text-muted-foreground">Carregando documentos...</p>
+        </div>
+      ) : documentosOrdenados.length > 0 ? (
         <div className="space-y-2">
           {documentosOrdenados.map((doc) => (
             <div key={doc.id} className="flex items-center justify-between p-3 border rounded-lg">

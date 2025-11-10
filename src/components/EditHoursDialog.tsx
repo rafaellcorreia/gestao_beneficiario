@@ -28,10 +28,13 @@ export function EditHoursDialog({ open, onOpenChange, beneficiario, onUpdate }: 
 
   useEffect(() => {
     if (beneficiario) {
-      setHorasCumpridas(beneficiario.horasCumpridas);
-      setHorasRestantes(beneficiario.horasRestantes);
-      // Calcular horas iniciais baseado no que foi cadastrado
-      setHorasIniciais(beneficiario.horasCumpridas + beneficiario.horasRestantes);
+      const cumpridas = beneficiario.horasCumpridas || 0;
+      const restantes = beneficiario.horasRestantes || 0;
+      setHorasCumpridas(cumpridas);
+      setHorasRestantes(restantes);
+      // Calcular horas iniciais (total) baseado no que foi cadastrado
+      const total = cumpridas + restantes;
+      setHorasIniciais(total > 0 ? total : 0);
     }
   }, [beneficiario]);
 
@@ -39,9 +42,18 @@ export function EditHoursDialog({ open, onOpenChange, beneficiario, onUpdate }: 
     const novasHorasCumpridas = parseInt(value) || 0;
     setHorasCumpridas(novasHorasCumpridas);
     
-    // Calcular horas restantes automaticamente
-    const novasHorasRestantes = Math.max(0, horasIniciais - novasHorasCumpridas);
-    setHorasRestantes(novasHorasRestantes);
+    // Calcular horas restantes automaticamente: restantes = total - cumpridas
+    if (horasIniciais > 0) {
+      const novasHorasRestantes = Math.max(0, horasIniciais - novasHorasCumpridas);
+      setHorasRestantes(novasHorasRestantes);
+    } else {
+      // Se não temos total inicial, manter a diferença
+      const restantesAtuais = beneficiario?.horasRestantes || 0;
+      const cumpridasAtuais = beneficiario?.horasCumpridas || 0;
+      const diferenca = novasHorasCumpridas - cumpridasAtuais;
+      const novasRestantes = Math.max(0, restantesAtuais - diferenca);
+      setHorasRestantes(novasRestantes);
+    }
   };
 
   const handleSave = async () => {

@@ -253,6 +253,10 @@ export function useBeneficiarios() {
 
       // Preparar dados do beneficiário
       // Primeiro, tentamos com todos os campos incluindo telefones
+      // As horas já devem estar corretas vindas do formulário (já calculadas)
+      const horasCumpridas = Number(data.horasCumpridas) || 0;
+      const horasRestantes = Number(data.horasRestantes) || 0;
+
       const beneficiarioDataComTelefones: Record<string, unknown> = {
         user_id: user.id,
         nome: data.nome.trim(),
@@ -261,8 +265,8 @@ export function useBeneficiarios() {
         data_recebimento: dataSql,
         status_vida: data.statusVida,
         local_lotacao: (data.localLotacao || 'Não informado').trim(),
-        horas_cumpridas: Number(data.horasCumpridas) || 0,
-        horas_restantes: Number(data.horasRestantes) || 0,
+        horas_cumpridas: horasCumpridas,
+        horas_restantes: horasRestantes,
         frequencia_pdf_url: frequenciaPdfUrl || null,
         documentacao_pdf_url: documentacaoPdfUrl || null,
         criado_por: "Sistema",
@@ -289,6 +293,10 @@ export function useBeneficiarios() {
         console.warn('Colunas de telefone não encontradas. Tentando inserir sem esses campos...');
         
         // Criar objeto sem os campos de telefone
+        // As horas já devem estar corretas vindas do formulário
+        const horasCumpridas = Number(data.horasCumpridas) || 0;
+        const horasRestantes = Number(data.horasRestantes) || 0;
+
         const beneficiarioDataSemTelefones: Record<string, unknown> = {
           user_id: user.id,
           nome: data.nome.trim(),
@@ -297,8 +305,8 @@ export function useBeneficiarios() {
           data_recebimento: dataSql,
           status_vida: data.statusVida,
           local_lotacao: (data.localLotacao || 'Não informado').trim(),
-          horas_cumpridas: Number(data.horasCumpridas) || 0,
-          horas_restantes: Number(data.horasRestantes) || 0,
+          horas_cumpridas: horasCumpridas,
+          horas_restantes: horasRestantes,
           frequencia_pdf_url: frequenciaPdfUrl || null,
           documentacao_pdf_url: documentacaoPdfUrl || null,
           criado_por: "Sistema",
@@ -433,20 +441,35 @@ export function useBeneficiarios() {
 
   const deleteBeneficiario = async (id: string) => {
     try {
-      const { error } = await supabase
+      console.log('Iniciando exclusão do beneficiário:', id);
+      
+      const { error, data } = await supabase
         .from("beneficiarios")
         .delete()
-        .eq("id", id);
+        .eq("id", id)
+        .select();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Erro ao excluir do banco:', error);
+        throw error;
+      }
 
+      console.log('Beneficiário excluído do banco:', data);
+      
+      // Remover da lista local imediatamente
+      setBeneficiarios(prev => prev.filter(b => b.id !== id));
+      
+      // Atualizar lista completa do servidor
       await fetchBeneficiarios();
+      
       toast.success("Beneficiário excluído com sucesso!");
       return { success: true };
     } catch (error: unknown) {
       console.error("Erro ao excluir beneficiário:", error);
       const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
       toast.error("Erro ao excluir beneficiário: " + errorMessage);
+      // Tentar atualizar lista mesmo em caso de erro para manter sincronizado
+      await fetchBeneficiarios();
       return { success: false, error: errorMessage };
     }
   };

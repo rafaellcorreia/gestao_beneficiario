@@ -18,11 +18,8 @@ import { PhotoCapture } from "./PhotoCapture";
 import { validarDataRecebimento } from "@/lib/validations";
 import { StatusVida } from "@/types/employee";
 import { toast } from "sonner";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon, Upload, FileText } from "lucide-react";
+import { Upload, FileText } from "lucide-react";
 import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
 
 const employeeSchema = z.object({
   nome: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
@@ -77,13 +74,33 @@ export function EmployeeForm({ onSubmit, onCancel, initialData }: EmployeeFormPr
   const telSecundarioDDD = watch('telefoneSecundarioDDD' as any);
   const telSecundarioNumero = watch('telefoneSecundarioNumero' as any);
 
-  // Define o total inicial na primeira mudança
+  // Quando horas cumpridas ou restantes mudam, atualizar total e recalcular
+  // Lógica: total = cumpridas + restantes (quando ambos informados)
+  //         restantes = total - cumpridas (quando total já definido)
   useEffect(() => {
-    const total = (Number(horasCumpridasWatch) || 0) + (Number(horasRestantesWatch) || 0);
-    if (total > 0 && horasIniciais === 0) {
+    const cumpridas = Number(horasCumpridasWatch) || 0;
+    const restantes = Number(horasRestantesWatch) || 0;
+    
+    // Se ainda não temos total inicial e ambos os valores foram informados, calcular total
+    if (horasIniciais === 0 && cumpridas > 0 && restantes > 0) {
+      const total = cumpridas + restantes;
       setHorasIniciais(total);
+      return; // Não recalcular ainda, deixar o usuário confirmar os valores
     }
-  }, [horasCumpridasWatch, horasRestantesWatch, horasIniciais]);
+    
+    // Se temos total inicial definido, recalcular restantes quando cumpridas mudam
+    if (horasIniciais > 0) {
+      const novasRestantes = Math.max(0, horasIniciais - cumpridas);
+      // Só atualizar se o valor for significativamente diferente para evitar loops
+      if (Math.abs(novasRestantes - restantes) > 0.1) {
+        setValue('horasRestantes', novasRestantes, { shouldValidate: true, shouldDirty: true });
+      }
+    }
+  }, [horasCumpridasWatch, horasIniciais, horasRestantesWatch, setValue]);
+  
+  // Permite que o usuário edite horas restantes manualmente apenas se o total ainda não foi definido
+  // Uma vez que ambos os valores são informados, o total é fixo e as restantes são calculadas
+  const podeEditarRestantes = horasIniciais === 0 || (Number(horasCumpridasWatch) || 0) === 0 || (Number(horasRestantesWatch) || 0) === 0;
 
   // Monta campos de telefone (DDD + número -> telefonePrincipal/telefoneSecundario)
   useEffect(() => {
@@ -208,49 +225,26 @@ export function EmployeeForm({ onSubmit, onCancel, initialData }: EmployeeFormPr
               <Label htmlFor="dataRecebimento">
                 Data de Recebimento <span className="text-destructive">*</span>
               </Label>
-              <div className="mt-1.5 flex gap-2">
-                <Input
-                  id="dataRecebimento"
-                  type="date"
-                  value={dataRecebimento ? format(dataRecebimento, 'yyyy-MM-dd') : ''}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    if (value) {
-                      const parsed = new Date(value + 'T00:00:00');
-                      if (!isNaN(parsed.getTime())) {
-                        setValue('dataRecebimento', parsed, { shouldValidate: true, shouldDirty: true });
-                      }
-                    } else {
-                      setValue('dataRecebimento', undefined as unknown as Date, { shouldValidate: true, shouldDirty: true });
+              <Input
+                id="dataRecebimento"
+                type="date"
+                value={dataRecebimento ? format(dataRecebimento, 'yyyy-MM-dd') : ''}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value) {
+                    const parsed = new Date(value + 'T00:00:00');
+                    if (!isNaN(parsed.getTime())) {
+                      setValue('dataRecebimento', parsed, { shouldValidate: true, shouldDirty: true });
                     }
-                  }}
-                  aria-invalid={!!errors.dataRecebimento}
-                  aria-describedby={errors.dataRecebimento ? 'data-recebimento-error' : undefined}
-                />
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className="shrink-0"
-                      type="button"
-                      aria-label="Abrir calendário"
-                    >
-                      <CalendarIcon className="h-4 w-4" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0 bg-popover" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={dataRecebimento}
-                      onSelect={(date) => setValue('dataRecebimento', date as Date, { shouldValidate: true, shouldDirty: true })}
-                      disabled={(date) => date > new Date()}
-                      initialFocus
-                      locale={ptBR}
-                      className="pointer-events-auto"
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
+                  } else {
+                    setValue('dataRecebimento', undefined as unknown as Date, { shouldValidate: true, shouldDirty: true });
+                  }
+                }}
+                className="mt-1.5"
+                max={format(new Date(), 'yyyy-MM-dd')}
+                aria-invalid={!!errors.dataRecebimento}
+                aria-describedby={errors.dataRecebimento ? 'data-recebimento-error' : undefined}
+              />
               {errors.dataRecebimento && (
                 <p id="data-recebimento-error" className="text-sm text-destructive mt-1">
                   {errors.dataRecebimento.message}
@@ -347,16 +341,6 @@ export function EmployeeForm({ onSubmit, onCancel, initialData }: EmployeeFormPr
                 type="number"
                 {...register("horasCumpridas", { 
                   valueAsNumber: true,
-                  onChange: (e) => {
-                    const valor = parseInt(e.target.value || '0', 10);
-                    // Atualiza horas restantes automaticamente se total conhecido
-                    const total = horasIniciais || ((Number(horasCumpridasWatch) || 0) + (Number(horasRestantesWatch) || 0));
-                    if (total > 0) {
-                      const novasRestantes = Math.max(0, total - (isNaN(valor) ? 0 : valor));
-                      setValue('horasRestantes', novasRestantes, { shouldValidate: true, shouldDirty: true });
-                      if (horasIniciais === 0) setHorasIniciais(total);
-                    }
-                  }
                 })}
                 className="mt-1.5"
                 placeholder="0"
@@ -369,6 +353,11 @@ export function EmployeeForm({ onSubmit, onCancel, initialData }: EmployeeFormPr
                   {errors.horasCumpridas.message}
                 </p>
               )}
+              <p className="text-xs text-muted-foreground mt-1">
+                {horasIniciais > 0 
+                  ? `As horas restantes serão calculadas automaticamente (Total: ${horasIniciais}h)`
+                  : 'Informe as horas cumpridas e restantes para definir o total'}
+              </p>
             </div>
 
             <div>
@@ -378,10 +367,13 @@ export function EmployeeForm({ onSubmit, onCancel, initialData }: EmployeeFormPr
               <Input
                 id="horasRestantes"
                 type="number"
-                {...register("horasRestantes", { valueAsNumber: true })}
-                className="mt-1.5"
+                {...register("horasRestantes", { 
+                  valueAsNumber: true,
+                })}
+                className={podeEditarRestantes ? "mt-1.5" : "mt-1.5 bg-muted"}
                 placeholder="0"
                 min="0"
+                readOnly={!podeEditarRestantes}
                 aria-invalid={!!errors.horasRestantes}
                 aria-describedby={errors.horasRestantes ? "horas-restantes-error" : undefined}
               />
@@ -390,6 +382,11 @@ export function EmployeeForm({ onSubmit, onCancel, initialData }: EmployeeFormPr
                   {errors.horasRestantes.message}
                 </p>
               )}
+              <p className="text-xs text-muted-foreground mt-1">
+                {horasIniciais > 0 
+                  ? `Calculado automaticamente: ${horasIniciais}h - ${horasCumpridasWatch || 0}h = ${horasRestantesWatch || 0}h` 
+                  : 'Informe as horas cumpridas e restantes para definir o total'}
+              </p>
             </div>
           </div>
 
