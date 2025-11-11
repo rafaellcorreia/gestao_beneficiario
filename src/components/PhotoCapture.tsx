@@ -15,7 +15,7 @@ interface PhotoCaptureProps {
 export function PhotoCapture({
   onPhotoCapture,
   currentPhoto,
-  label = "Foto do Funcionário",
+  label = "Foto do Beneficiário",
   required = true,
 }: PhotoCaptureProps) {
   const [preview, setPreview] = useState<string | null>(currentPhoto || null);

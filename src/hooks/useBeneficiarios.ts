@@ -384,6 +384,69 @@ export function useBeneficiarios() {
 
       console.log('Beneficiário inserido com sucesso:', newBenef?.id);
 
+      // Registrar documentos PDF na tabela documentos_pdf se existirem
+      if (newBenef?.id) {
+        const agora = new Date().toISOString();
+        
+        // Registrar PDF de frequência se foi anexado
+        if (frequenciaPdfUrl && data.frequenciaPDF) {
+          try {
+            console.log('Registrando PDF de frequência na tabela documentos_pdf...');
+            const { error: docError } = await supabase
+              .from('documentos_pdf')
+              .insert({
+                beneficiario_id: newBenef.id,
+                nome: data.frequenciaPDF.name,
+                url: frequenciaPdfUrl,
+                tipo: 'frequencia',
+                usuario: user.email || user.id || 'Usuário desconhecido',
+                data_anexacao: agora,
+                criado_em: agora,
+                atualizado_em: agora,
+              });
+            
+            if (docError) {
+              console.error('Erro ao registrar PDF de frequência na tabela documentos_pdf:', docError);
+              toast.warning('PDF de frequência foi salvo, mas houve um erro ao registrar na ficha.');
+            } else {
+              console.log('PDF de frequência registrado com sucesso na tabela documentos_pdf');
+            }
+          } catch (docError) {
+            console.error('Erro ao registrar PDF de frequência (não crítico):', docError);
+            toast.warning('PDF de frequência foi salvo, mas houve um erro ao registrar na ficha.');
+          }
+        }
+
+        // Registrar PDF de documentação se foi anexado
+        if (documentacaoPdfUrl && data.documentacaoPDF) {
+          try {
+            console.log('Registrando PDF de documentação na tabela documentos_pdf...');
+            const { error: docError } = await supabase
+              .from('documentos_pdf')
+              .insert({
+                beneficiario_id: newBenef.id,
+                nome: data.documentacaoPDF.name,
+                url: documentacaoPdfUrl,
+                tipo: 'documentacao',
+                usuario: user.email || user.id || 'Usuário desconhecido',
+                data_anexacao: agora,
+                criado_em: agora,
+                atualizado_em: agora,
+              });
+            
+            if (docError) {
+              console.error('Erro ao registrar PDF de documentação na tabela documentos_pdf:', docError);
+              toast.warning('PDF de documentação foi salvo, mas houve um erro ao registrar na ficha.');
+            } else {
+              console.log('PDF de documentação registrado com sucesso na tabela documentos_pdf');
+            }
+          } catch (docError) {
+            console.error('Erro ao registrar PDF de documentação (não crítico):', docError);
+            toast.warning('PDF de documentação foi salvo, mas houve um erro ao registrar na ficha.');
+          }
+        }
+      }
+
       if (data.observacaoInicial && newBenef) {
         try {
           console.log('Inserindo observação inicial...');
