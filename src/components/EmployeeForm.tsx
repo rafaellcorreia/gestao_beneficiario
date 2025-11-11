@@ -75,37 +75,47 @@ export function EmployeeForm({ onSubmit, onCancel, initialData }: EmployeeFormPr
   const telSecundarioNumero = watch('telefoneSecundarioNumero' as any);
 
   // Lógica de cálculo de horas:
-  // 1. Usuário informa horas cumpridas e horas restantes (ex: 20 e 80)
-  // 2. Total = cumpridas + restantes (ex: 100) - calculado quando ambos são informados
-  // 3. Total fica FIXO
-  // 4. Quando horas cumpridas mudam, horas restantes = total - cumpridas (SEMPRE)
-  // 5. Exemplo: se total=100 e cumpridas mudam de 20 para 30, restantes = 100-30 = 70
+  // 1. Ambos os campos (cumpridas e restantes) são editáveis manualmente
+  // 2. Quando horas cumpridas mudam, horas restantes são recalculadas automaticamente: restantes = total - cumpridas
+  // 3. Quando horas restantes são editadas manualmente, o total é recalculado: total = cumpridas + restantes
+  // 4. O total inicial é calculado quando ambos os valores são informados pela primeira vez
   
-  // Efeito para calcular total quando ambos os valores são informados pela primeira vez
+  // Estado para rastrear qual campo foi editado por último (para evitar loops)
+  const [ultimoCampoEditado, setUltimoCampoEditado] = useState<'cumpridas' | 'restantes' | null>(null);
+  
+  // Efeito para calcular/atualizar total quando os valores mudam
   useEffect(() => {
     const cumpridas = Number(horasCumpridasWatch) || 0;
     const restantes = Number(horasRestantesWatch) || 0;
+    const novoTotal = cumpridas + restantes;
     
     // Se ainda não temos total definido E ambos os valores são informados, calcular total
     if (horasIniciais === 0) {
-      // Permitir definir total apenas quando ambos são > 0 OU quando um deles muda e o outro já existe
-      if ((cumpridas > 0 && restantes > 0) || (cumpridas > 0 && restantes >= 0) || (cumpridas >= 0 && restantes > 0)) {
-        const total = cumpridas + restantes;
-        if (total > 0) {
-          setHorasIniciais(total);
-          console.log('✅ Total de horas definido:', total, '| Cumpridas:', cumpridas, '| Restantes:', restantes);
-        }
+      if (novoTotal > 0) {
+        setHorasIniciais(novoTotal);
+        console.log('✅ Total de horas definido:', novoTotal, '| Cumpridas:', cumpridas, '| Restantes:', restantes);
+      }
+    } else {
+      // Se o total já foi definido e o usuário editou horas restantes manualmente, atualizar o total
+      if (ultimoCampoEditado === 'restantes' && novoTotal > 0) {
+        setHorasIniciais(novoTotal);
+        console.log('🔄 Total atualizado:', novoTotal, '| Cumpridas:', cumpridas, '| Restantes:', restantes);
       }
     }
-  }, [horasCumpridasWatch, horasRestantesWatch, horasIniciais]);
+  }, [horasCumpridasWatch, horasRestantesWatch, horasIniciais, ultimoCampoEditado]);
 
-  // Efeito para recalcular horas restantes quando horas cumpridas mudam (APÓS total estar definido)
+  // Efeito para recalcular horas restantes quando horas cumpridas mudam (mantendo total fixo)
+  // Este efeito só executa quando horas cumpridas são editadas E há um total definido
   useEffect(() => {
-    if (horasIniciais > 0) {
+    // Só recalcular se:
+    // 1. Há um total definido
+    // 2. O último campo editado foi "cumpridas"
+    // 3. Não estamos no meio de uma edição de "restantes"
+    if (horasIniciais > 0 && ultimoCampoEditado === 'cumpridas') {
       const cumpridas = Number(horasCumpridasWatch) || 0;
       const restantesAtuais = Number(horasRestantesWatch) || 0;
       
-      // SEMPRE recalcular restantes = total - cumpridas
+      // Recalcular restantes = total - cumpridas (mantendo total fixo)
       const novasRestantes = Math.max(0, horasIniciais - cumpridas);
       
       // Atualizar apenas se o valor mudou significativamente
@@ -114,11 +124,7 @@ export function EmployeeForm({ onSubmit, onCancel, initialData }: EmployeeFormPr
         setValue('horasRestantes', novasRestantes, { shouldValidate: true, shouldDirty: true });
       }
     }
-  }, [horasCumpridasWatch, horasIniciais, setValue]); // Removido horasRestantesWatch para evitar loop
-  
-  // Horas restantes NUNCA podem ser editadas manualmente após o total ser definido
-  // O usuário só pode editar horas cumpridas, e as restantes são calculadas automaticamente
-  const podeEditarRestantes = horasIniciais === 0;
+  }, [horasCumpridasWatch, horasIniciais, setValue, ultimoCampoEditado]);
 
   // Monta campos de telefone (DDD + número -> telefonePrincipal/telefoneSecundario)
   useEffect(() => {
@@ -367,13 +373,14 @@ export function EmployeeForm({ onSubmit, onCancel, initialData }: EmployeeFormPr
                 step="0.5"
                 onChange={(e) => {
                   const valor = parseFloat(e.target.value) || 0;
+                  setUltimoCampoEditado('cumpridas');
                   setValue('horasCumpridas', valor, { shouldValidate: true, shouldDirty: true });
                   
-                  // Se temos total definido, recalcular restantes imediatamente
+                  // Se temos total definido, recalcular restantes automaticamente
                   if (horasIniciais > 0) {
                     const novasRestantes = Math.max(0, horasIniciais - valor);
                     setValue('horasRestantes', novasRestantes, { shouldValidate: true, shouldDirty: true });
-                    console.log('⚡ Cálculo imediato: Total=', horasIniciais, '- Cumpridas=', valor, '= Restantes=', novasRestantes);
+                    console.log('⚡ Cálculo automático: Total=', horasIniciais, '- Cumpridas=', valor, '= Restantes=', novasRestantes);
                   }
                 }}
                 aria-invalid={!!errors.horasCumpridas}
@@ -386,7 +393,7 @@ export function EmployeeForm({ onSubmit, onCancel, initialData }: EmployeeFormPr
               )}
               <p className="text-xs text-muted-foreground mt-1">
                 {horasIniciais > 0 
-                  ? `📊 Total: ${horasIniciais}h | As horas restantes serão calculadas automaticamente`
+                  ? `📊 Total: ${horasIniciais}h | Horas restantes serão recalculadas automaticamente quando você alterar as cumpridas`
                   : 'ℹ️ Informe as horas cumpridas e restantes para definir o total'}
               </p>
             </div>
@@ -394,9 +401,6 @@ export function EmployeeForm({ onSubmit, onCancel, initialData }: EmployeeFormPr
             <div>
               <Label htmlFor="horasRestantes">
                 Horas Restantes <span className="text-destructive">*</span>
-                {horasIniciais > 0 && (
-                  <span className="text-xs text-muted-foreground ml-2">(calculado automaticamente)</span>
-                )}
               </Label>
               <Input
                 id="horasRestantes"
@@ -405,11 +409,25 @@ export function EmployeeForm({ onSubmit, onCancel, initialData }: EmployeeFormPr
                   valueAsNumber: true,
                   min: { value: 0, message: "Horas restantes não podem ser negativas" },
                 })}
-                className={podeEditarRestantes ? "mt-1.5" : "mt-1.5 bg-muted cursor-not-allowed"}
+                className="mt-1.5"
                 placeholder="0"
                 min="0"
                 step="0.5"
-                readOnly={!podeEditarRestantes}
+                onChange={(e) => {
+                  const valor = parseFloat(e.target.value) || 0;
+                  setUltimoCampoEditado('restantes');
+                  setValue('horasRestantes', valor, { shouldValidate: true, shouldDirty: true });
+                  
+                  // Se o usuário editar horas restantes manualmente:
+                  // - Se não há total definido, calcular o total
+                  // - Se há total definido, atualizar o total (permitindo ajuste manual)
+                  const cumpridas = Number(horasCumpridasWatch) || 0;
+                  const novoTotal = cumpridas + valor;
+                  if (novoTotal > 0) {
+                    setHorasIniciais(novoTotal);
+                    console.log('🔄 Total atualizado: Cumpridas=', cumpridas, '+ Restantes=', valor, '= Total=', novoTotal);
+                  }
+                }}
                 aria-invalid={!!errors.horasRestantes}
                 aria-describedby={errors.horasRestantes ? "horas-restantes-error" : undefined}
               />
@@ -420,14 +438,11 @@ export function EmployeeForm({ onSubmit, onCancel, initialData }: EmployeeFormPr
               )}
               <p className="text-xs text-muted-foreground mt-1">
                 {horasIniciais > 0 
-                  ? `🧮 Cálculo: ${horasIniciais}h (total) - ${horasCumpridasWatch || 0}h (cumpridas) = ${horasRestantesWatch || 0}h (restantes)` 
-                  : 'ℹ️ Informe as horas restantes inicialmente'}
+                  ? ultimoCampoEditado === 'cumpridas'
+                    ? `🧮 Calculado automaticamente: ${horasIniciais}h (total) - ${horasCumpridasWatch || 0}h (cumpridas) = ${horasRestantesWatch || 0}h (restantes)`
+                    : `📝 Editável manualmente. Total atual: ${horasIniciais}h`
+                  : 'ℹ️ Informe as horas restantes. O total será calculado automaticamente.'}
               </p>
-              {horasIniciais > 0 && horasCumpridasWatch > 0 && (
-                <p className="text-xs text-green-600 dark:text-green-400 mt-1 font-medium">
-                  ✅ As horas restantes são recalculadas automaticamente quando você altera as horas cumpridas
-                </p>
-              )}
             </div>
           </div>
 
