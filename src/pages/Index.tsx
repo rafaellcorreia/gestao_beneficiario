@@ -143,8 +143,17 @@ const Index = () => {
                   backgroundColor: '#3A4F66',
                   width: '200px',
                   height: '200px',
-                  padding: '1px'
+                  padding: '1px',
+                  imageRendering: '-webkit-optimize-contrast',
+                  WebkitBackfaceVisibility: 'hidden',
+                  backfaceVisibility: 'hidden',
+                  transform: 'translateZ(0)',
+                  willChange: 'transform',
+                  WebkitFontSmoothing: 'antialiased',
+                  MozOsxFontSmoothing: 'grayscale'
                 }}
+                loading="eager"
+                decoding="sync"
               />
               <div className="text-center md:text-left">
                 <h1 className="text-3xl md:text-4xl font-bold text-white leading-tight">
