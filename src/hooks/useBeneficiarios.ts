@@ -626,11 +626,64 @@ export function useBeneficiarios() {
     }
   };
 
+  const updateBeneficiario = async (id: string, updates: {
+    nome?: string;
+    numeroProcesso?: string;
+    dataRecebimento?: Date;
+    statusVida?: StatusVida;
+    localLotacao?: string;
+    telefonePrincipal?: string;
+    telefoneSecundario?: string;
+  }) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        toast.error("Usuário não autenticado");
+        return { success: false, error: "User not authenticated" };
+      }
+
+      const updateData: Record<string, any> = {
+        atualizado_em: new Date().toISOString(),
+        atualizado_por: user.email || "Sistema",
+      };
+
+      if (updates.nome !== undefined) updateData.nome = updates.nome;
+      if (updates.numeroProcesso !== undefined) updateData.numero_processo = updates.numeroProcesso;
+      if (updates.dataRecebimento !== undefined) updateData.data_recebimento = updates.dataRecebimento.toISOString();
+      if (updates.statusVida !== undefined) updateData.status_vida = updates.statusVida;
+      if (updates.localLotacao !== undefined) updateData.local_lotacao = updates.localLotacao;
+      if (updates.telefonePrincipal !== undefined) updateData.telefone_principal = updates.telefonePrincipal || null;
+      if (updates.telefoneSecundario !== undefined) updateData.telefone_secundario = updates.telefoneSecundario || null;
+
+      const { error } = await supabase
+        .from("beneficiarios")
+        .update(updateData)
+        .eq("id", id);
+
+      if (error) {
+        console.error("Erro ao atualizar beneficiário:", error);
+        toast.error("Erro ao atualizar beneficiário: " + error.message);
+        return { success: false, error: error.message };
+      }
+
+      toast.success("Beneficiário atualizado com sucesso!");
+      await fetchBeneficiarios();
+      return { success: true };
+    } catch (error: unknown) {
+      console.error("Erro ao atualizar beneficiário:", error);
+      const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
+      toast.error("Erro ao atualizar beneficiário: " + errorMessage);
+      return { success: false, error: errorMessage };
+    }
+  };
+
   return {
     beneficiarios,
     loading,
     fetchBeneficiarios,
     createBeneficiario,
     deleteBeneficiario,
+    updateBeneficiario,
   };
 }

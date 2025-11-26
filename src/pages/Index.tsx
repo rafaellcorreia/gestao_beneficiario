@@ -15,6 +15,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { HorasBadge } from "@/components/HorasBadge";
 import { FilterDialog } from "@/components/FilterDialog";
 import { EditHoursDialog } from "@/components/EditHoursDialog";
+import { EditBeneficiarioDialog } from "@/components/EditBeneficiarioDialog";
 import { PDFManager } from "@/components/PDFManager";
 import { ObservationsManager } from "@/components/ObservationsManager";
 import { ArquivoDigitalFixed } from "@/components/ArquivoDigitalFixed";
@@ -30,6 +31,7 @@ const Index = () => {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Beneficiario | null>(null);
   const [isEditHoursOpen, setIsEditHoursOpen] = useState(false);
+  const [isEditBeneficiarioOpen, setIsEditBeneficiarioOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [beneficiarioToDelete, setBeneficiarioToDelete] = useState<Beneficiario | null>(null);
   const [filters, setFilters] = useState<FiltrosAplicados>({
@@ -371,9 +373,34 @@ const Index = () => {
                     <p className="text-muted-foreground">
                       Data de Recebimento: {new Date(beneficiarioAtualizado.dataRecebimento).toLocaleDateString("pt-BR")}
                     </p>
+                    {(beneficiarioAtualizado.telefonePrincipal || beneficiarioAtualizado.telefoneSecundario) && (
+                      <div className="mt-2 space-y-1">
+                        {beneficiarioAtualizado.telefonePrincipal && (
+                          <p className="text-sm text-muted-foreground">
+                            Telefone Principal: <span className="font-medium text-foreground">{beneficiarioAtualizado.telefonePrincipal}</span>
+                          </p>
+                        )}
+                        {beneficiarioAtualizado.telefoneSecundario && (
+                          <p className="text-sm text-muted-foreground">
+                            Telefone Secundário: <span className="font-medium text-foreground">{beneficiarioAtualizado.telefoneSecundario}</span>
+                          </p>
+                        )}
+                      </div>
+                    )}
                     <div className="flex gap-2 mt-2">
                       <StatusBadge status={beneficiarioAtualizado.statusVida} />
                       <HorasBadge horas={beneficiarioAtualizado.horasRestantes} />
+                    </div>
+                    <div className="mt-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setIsEditBeneficiarioOpen(true)}
+                        className="h-7 px-2 text-xs"
+                      >
+                        <Edit3 className="h-3 w-3 mr-1" />
+                        Editar Informações
+                      </Button>
                     </div>
                     <div className="mt-2 space-y-1">
                       <div className="flex items-center justify-between">
@@ -446,6 +473,23 @@ const Index = () => {
       <EditHoursDialog
         open={isEditHoursOpen}
         onOpenChange={setIsEditHoursOpen}
+        beneficiario={selectedEmployee}
+        onUpdate={async () => {
+          await fetchBeneficiarios();
+          // Atualizar selectedEmployee com dados atualizados
+          if (selectedEmployee) {
+            const updated = beneficiarios.find(b => b.id === selectedEmployee.id);
+            if (updated) {
+              setSelectedEmployee(updated);
+            }
+          }
+        }}
+      />
+
+      {/* Dialog Editar Beneficiário */}
+      <EditBeneficiarioDialog
+        open={isEditBeneficiarioOpen}
+        onOpenChange={setIsEditBeneficiarioOpen}
         beneficiario={selectedEmployee}
         onUpdate={async () => {
           await fetchBeneficiarios();
