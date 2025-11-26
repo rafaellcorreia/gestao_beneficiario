@@ -17,10 +17,7 @@ export function HorasBadge({ horas, className }: HorasBadgeProps) {
   };
 
   const formatarHoras = (h: number): string => {
-    if (h < 24) return `${h}h`;
-    const dias = Math.floor(h / 24);
-    const horasRestantes = h % 24;
-    return `${dias}d ${horasRestantes}h`;
+    return `${h}h`;
   };
 
   return (
